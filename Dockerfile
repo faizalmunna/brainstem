@@ -41,7 +41,7 @@ RUN uv sync --locked --extra dev \
         tests/test_skills.py \
         tests/test_task_packet.py
 
-FROM node:20-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS npm-test
+FROM node:25-bookworm-slim@sha256:81db02c4b671288a03915da9534dbd54f96d0e7c24d80ccc54f5b36b2e684370 AS npm-test
 # Exercise the published npm artifact in Linux. The wrapper must create its
 # own locked Python environment and launch the real CLI without relying on a
 # sibling checkout. This test-only stage is excluded from the runtime image.

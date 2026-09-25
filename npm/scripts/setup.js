@@ -72,7 +72,7 @@ function main() {
   if (!haveUv && !pythonCmd) {
     console.error(
       "\nbrainstem requires uv on PATH for a verified installation: https://docs.astral.sh/uv/\n" +
-        "Install uv, then re-run: npm install -g brainstem\n"
+        "Install uv, then re-run: npm install -g @faizalmunna/brainstem\n"
     );
     process.exit(1);
   }

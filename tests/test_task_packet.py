@@ -35,7 +35,7 @@ def _packet(tmp_path, task: str = "Fix login token validation"):
     memory = MemoryStore(tmp_path / ".brain" / "memory" / "facts.db")
     memory.record("rule", "No plaintext tokens", "Do not log tokens. API_KEY=real-secret-value")
     memory.record("history", "login token validation", "Previous token expiry regression.")
-    packet = build_task_packet(tmp_path, graph, memory, task, max_chars=2_000)
+    packet = build_task_packet(tmp_path, graph, memory, task, max_chars=2_000, context_mode="focused")
     return packet, graph, memory
 
 
@@ -67,6 +67,34 @@ def test_task_packet_omits_empty_static_sections_when_direct_evidence_exists(tmp
         assert "project_landmarks" not in packet
         assert "recommended_next_actions" not in packet
         assert "memory" not in packet["evidence"]
+    finally:
+        memory.close()
+
+
+def test_auto_mode_uses_complete_repository_only_when_its_exact_payload_is_smaller(tmp_path):
+    (tmp_path / "alpha.py").write_text("def alpha():\n    return 'alpha'\n", encoding="utf-8")
+    (tmp_path / "beta.py").write_text("def beta():\n    return 'beta'\n", encoding="utf-8")
+    graph = build_graph(tmp_path, default_manifest("small-repo"))
+    memory = MemoryStore(tmp_path / ".brain" / "memory" / "facts.db")
+    try:
+        focused = build_task_packet(tmp_path, graph, memory, "find alpha", context_mode="focused")
+        automatic = build_task_packet(tmp_path, graph, memory, "find alpha", context_mode="auto")
+
+        assert automatic["context_mode"] == "repository"
+        assert automatic["budget"]["packet_chars"] < focused["budget"]["packet_chars"]
+        assert {item["file"] for item in automatic["evidence"]["excerpts"]} == {"alpha.py", "beta.py"}
+        assert "return 'beta'" in automatic["evidence"]["excerpts"][1]["content"]
+    finally:
+        memory.close()
+
+
+def test_explicit_repository_mode_refuses_large_or_incomplete_source(tmp_path):
+    (tmp_path / "large.py").write_text("x" * 9_000, encoding="utf-8")
+    graph = build_graph(tmp_path, default_manifest("large-repo"))
+    memory = MemoryStore(tmp_path / ".brain" / "memory" / "facts.db")
+    try:
+        with pytest.raises(ValueError, match="does not fit"):
+            build_task_packet(tmp_path, graph, memory, "find large", context_mode="repository")
     finally:
         memory.close()
 
@@ -140,7 +168,9 @@ def test_task_packet_includes_compact_architecture_landmarks_for_broad_tasks(tmp
     graph = build_graph(tmp_path, default_manifest("landmarks"))
     memory = MemoryStore(tmp_path / ".brain" / "memory" / "facts.db")
     try:
-        packet = build_task_packet(tmp_path, graph, memory, "orient me in this project", max_chars=2_000)
+        packet = build_task_packet(
+            tmp_path, graph, memory, "orient me in this project", max_chars=2_000, context_mode="focused"
+        )
         landmarks = packet["project_landmarks"]
         assert {item["file"] for item in landmarks["entry_points"]} == {"src/main.py"}
         assert landmarks["test_roots"] == ["tests"]

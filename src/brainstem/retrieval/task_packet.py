@@ -33,6 +33,10 @@ MAX_IMPACT_NEIGHBORS = 12
 MAX_TEST_CANDIDATES = 10
 MAX_MEMORY_TEXT_CHARS = 1_200
 MAX_LANDMARKS = 12
+# ``auto`` may inspect a small repository for a whole-repository packet, but
+# never turns a normal large-repository request into an O(repository) source
+# read just to prove that focused retrieval was the right choice.
+MAX_AUTO_REPOSITORY_FILES = 24
 
 _SENSITIVE_FILENAMES = {"id_rsa", "id_dsa", "id_ecdsa", "id_ed25519", "credentials", "secrets"}
 _SENSITIVE_SUFFIXES = {".pem", ".key", ".p12", ".pfx"}
@@ -363,6 +367,73 @@ def _empty_bundle(hits: list[RetrievalHit]) -> dict[str, Any]:
     }
 
 
+def _complete_repository_bundle(repo_root: Path, graph: RepoGraph, max_chars: int) -> dict[str, Any] | None:
+    """Return every indexed source file only when it safely fits as one bundle.
+
+    A focused packet has useful fixed metadata: reasons, freshness, tests,
+    memory, and policy. For a tiny project that envelope can cost more than
+    the complete source itself. This helper deliberately returns ``None`` for
+    a large, unreadable, escaping, binary, or sensitive indexed file, so auto
+    mode can only choose a genuine complete *safe* repository snapshot.
+    """
+    if len(graph.files) > MAX_AUTO_REPOSITORY_FILES:
+        return None
+    root = repo_root.resolve()
+    excerpts: list[dict[str, Any]] = []
+    fingerprint_items: list[dict[str, str]] = []
+    total_chars = 0
+    for path, node in sorted(graph.files.items()):
+        try:
+            candidate = (root / path).resolve()
+            candidate.relative_to(root)
+        except (OSError, ValueError):
+            return None
+        if not candidate.is_file() or _looks_sensitive(candidate):
+            return None
+        try:
+            text = candidate.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return None
+        if "\x00" in text:
+            return None
+        total_chars += len(text)
+        if total_chars > max_chars:
+            return None
+        current_hash = _content_hash(candidate)
+        if current_hash is None:
+            return None
+        excerpts.append(
+            {
+                "file": path,
+                "symbol": None,
+                "start_line": 1,
+                "end_line": max(1, text.count("\n") + 1),
+                # This is intentionally raw UTF-8 source rather than the
+                # line-numbered focused-excerpt format. It avoids spending a
+                # second copy of every line number when the caller receives
+                # the complete indexed source anyway.
+                "content": text,
+                "char_count": len(text),
+                "truncated": False,
+            }
+        )
+        fingerprint_items.append({"file": path, "content_hash": current_hash})
+    fingerprint = hashlib.sha256(json.dumps(fingerprint_items, sort_keys=True).encode("utf-8")).hexdigest()
+    return {
+        "excerpts": excerpts,
+        "total_chars": total_chars,
+        "truncated": False,
+        "skipped": 0,
+        "sensitive_skipped": 0,
+        "deduplicated": 0,
+        "max_chars": max_chars,
+        "repository_fingerprint": fingerprint,
+        "index_current": all(
+            item["content_hash"] == graph.files[item["file"]].content_hash for item in fingerprint_items
+        ),
+    }
+
+
 def _compact_auxiliary(packet: dict[str, Any], total_budget: int) -> int:
     """Drop lowest-priority metadata only after source was reduced first."""
     evidence = packet["evidence"]
@@ -400,6 +471,7 @@ def build_task_packet(
     limit: int = 5,
     max_chars: int = DEFAULT_PACKET_CHARS,
     max_packet_chars: int = DEFAULT_PACKET_TOTAL_CHARS,
+    context_mode: str = "auto",
 ) -> dict[str, Any]:
     """Compile the smallest inspectable evidence packet for ``task``.
 
@@ -416,17 +488,24 @@ def build_task_packet(
         raise ValueError(f"limit must be between 1 and {MAX_BUNDLE_HITS}")
     if not MIN_PACKET_TOTAL_CHARS <= max_packet_chars <= MAX_PACKET_TOTAL_CHARS:
         raise ValueError(f"max_packet_chars must be between {MIN_PACKET_TOTAL_CHARS} and {MAX_PACKET_TOTAL_CHARS}")
+    if context_mode not in {"auto", "focused", "repository"}:
+        raise ValueError("context_mode must be 'auto', 'focused', or 'repository'")
 
-    engine = RetrievalEngine(graph, vector_store)
+    engine = RetrievalEngine(graph, vector_store, repo_root=repo_root)
     hits = engine.retrieve(task, limit=limit)
 
-    def assemble(source_budget: int) -> dict[str, Any]:
-        bundle = build_context_bundle(repo_root, hits, max_chars=source_budget) if source_budget else _empty_bundle(hits)
+    def assemble(
+        source_budget: int,
+        bundle: dict[str, Any] | None = None,
+        *,
+        complete_repository: bool = False,
+    ) -> dict[str, Any]:
+        bundle = bundle or (build_context_bundle(repo_root, hits, max_chars=source_budget) if source_budget else _empty_bundle(hits))
         excerpts = bundle["excerpts"]
         excerpt_files = {excerpt["file"] for excerpt in excerpts}
-        selected = [hit for hit in hits if hit.file in excerpt_files]
+        selected = [] if complete_repository else [hit for hit in hits if hit.file in excerpt_files]
         raw_git_state = _git_state(repo_root)
-        impact_neighbors = _impact_neighbors(graph, selected, excerpt_files)
+        impact_neighbors = [] if complete_repository else _impact_neighbors(graph, selected, excerpt_files)
         related_files = excerpt_files | {item["file"] for item in impact_neighbors}
         git_state = _task_git_state(raw_git_state, related_files)
         freshness = _freshness(repo_root, graph, excerpts)
@@ -444,9 +523,11 @@ def build_task_packet(
         if memory_freshness["stale_omitted"]:
             warnings.append("Stale hash-bound memory was omitted from this task packet.")
 
-        evidence: dict[str, Any] = {
-            "excerpts": excerpts,
-            "selected": [
+        evidence: dict[str, Any] = {"excerpts": excerpts}
+        if complete_repository:
+            evidence["source_format"] = "complete UTF-8 indexed source; files are not line-numbered"
+        else:
+            evidence["selected"] = [
                 {
                     "file": hit.file,
                     "symbol": hit.symbol,
@@ -456,9 +537,8 @@ def build_task_packet(
                     "reason": hit.reason,
                 }
                 for hit in selected
-            ],
-        }
-        test_candidates = _test_candidates(graph, selected)
+            ]
+        test_candidates = [] if complete_repository else _test_candidates(graph, selected)
         # Empty optional sections communicate no useful evidence but cost the
         # same every task. Omit them in focused packets; callers can treat a
         # missing optional section exactly like an empty list. This preserves
@@ -476,6 +556,7 @@ def build_task_packet(
 
         packet: dict[str, Any] = {
             "packet_version": PACKET_VERSION,
+            "context_mode": "repository" if complete_repository else "focused",
             "task": task,
             "evidence": evidence,
             "repository_state": {"git": git_state, "freshness": freshness},
@@ -489,7 +570,15 @@ def build_task_packet(
                 "sensitive_skipped": bundle["sensitive_skipped"],
                 "overlapping_excerpts_deduplicated": bundle["deduplicated"],
             },
-            "context_manifest": _context_manifest(graph, excerpts),
+            "context_manifest": (
+                {
+                    "repository_fingerprint": bundle["repository_fingerprint"],
+                    "complete_indexed_source": True,
+                    "file_count": len(excerpts),
+                }
+                if complete_repository
+                else _context_manifest(graph, excerpts)
+            ),
         }
         if risk_signals:
             packet["risk_signals"] = risk_signals
@@ -509,27 +598,52 @@ def build_task_packet(
             ]
         return packet
 
-    source_budget = max_chars
-    packet = assemble(source_budget)
-    while _serialized_chars(packet) > max_packet_chars and source_budget:
-        overflow = _serialized_chars(packet) - max_packet_chars
-        source_budget = max(0, source_budget - max(overflow * 2, MIN_BUNDLE_CHARS))
-        if 0 < source_budget < MIN_BUNDLE_CHARS:
-            source_budget = 0
-        packet = assemble(source_budget)
+    def finalize(packet: dict[str, Any], *, source_trimmed: bool) -> dict[str, Any]:
+        if source_trimmed:
+            packet.setdefault("warnings", []).append("Evidence was trimmed to honor the whole-packet context budget.")
+        # Include accounting fields in the measured payload before doing the
+        # final trim; otherwise a near-limit packet could exceed its advertised
+        # cap.
+        packet["budget"]["auxiliary_items_omitted"] = 0
+        packet["budget"]["packet_chars"] = 0
+        auxiliary_omitted = _compact_auxiliary(packet, max_packet_chars)
+        if auxiliary_omitted and not source_trimmed:
+            packet.setdefault("warnings", []).append("Evidence was trimmed to honor the whole-packet context budget.")
+            auxiliary_omitted += _compact_auxiliary(packet, max_packet_chars)
+        packet["budget"]["auxiliary_items_omitted"] = auxiliary_omitted
+        for _ in range(3):
+            packet["budget"]["packet_chars"] = _serialized_chars(packet)
+        return packet
 
-    source_trimmed = source_budget != max_chars
-    if source_trimmed:
-        packet.setdefault("warnings", []).append("Evidence was trimmed to honor the whole-packet context budget.")
-    # Include accounting fields in the measured payload before doing the final
-    # trim; otherwise a near-limit packet could exceed its advertised cap.
-    packet["budget"]["auxiliary_items_omitted"] = 0
-    packet["budget"]["packet_chars"] = 0
-    auxiliary_omitted = _compact_auxiliary(packet, max_packet_chars)
-    if auxiliary_omitted and not source_trimmed:
-        packet.setdefault("warnings", []).append("Evidence was trimmed to honor the whole-packet context budget.")
-        auxiliary_omitted += _compact_auxiliary(packet, max_packet_chars)
-    packet["budget"]["auxiliary_items_omitted"] = auxiliary_omitted
-    for _ in range(3):
-        packet["budget"]["packet_chars"] = _serialized_chars(packet)
-    return packet
+    focused_packet: dict[str, Any] | None = None
+    if context_mode != "repository":
+        source_budget = max_chars
+        focused_packet = assemble(source_budget)
+        while _serialized_chars(focused_packet) > max_packet_chars and source_budget:
+            overflow = _serialized_chars(focused_packet) - max_packet_chars
+            source_budget = max(0, source_budget - max(overflow * 2, MIN_BUNDLE_CHARS))
+            if 0 < source_budget < MIN_BUNDLE_CHARS:
+                source_budget = 0
+            focused_packet = assemble(source_budget)
+        focused_packet = finalize(focused_packet, source_trimmed=source_budget != max_chars)
+
+    complete_bundle = _complete_repository_bundle(repo_root, graph, max_chars)
+    if complete_bundle is not None:
+        repository_packet = finalize(
+            assemble(max_chars, complete_bundle, complete_repository=True), source_trimmed=False
+        )
+        if repository_packet["budget"]["packet_chars"] > max_packet_chars:
+            complete_bundle = None
+        elif context_mode == "repository" or (
+            context_mode == "auto"
+            and focused_packet is not None
+            and repository_packet["budget"]["packet_chars"] < focused_packet["budget"]["packet_chars"]
+        ):
+            return repository_packet
+
+    if context_mode == "repository":
+        raise ValueError(
+            "The complete safe indexed repository does not fit the requested source and packet budgets; use focused or auto mode."
+        )
+    assert focused_packet is not None
+    return focused_packet

@@ -60,6 +60,19 @@ uv run brainstem prepare "trace the login redirect bug" --path /path/to/your-pro
 Start every coding or review task with `prepare`. Expand context only when the
 packet identifies a specific missing symbol, dependency, or test.
 
+When symbols and paths yield too little production-code evidence, retrieval
+can make one bounded, local-only source-text pass (at most 500 files, 2 MB
+total, and 256 KB per file). It skips sensitive filenames, writes no source
+terms to the index, and still returns only the capped excerpts. This lets an
+implementation question match meaningful words found only in code bodies or
+comments without sending the repository to a model.
+
+For small projects, `prepare` uses `--context-mode auto` by default. It
+compares the exact safe complete-repository payload with the focused packet and
+uses complete indexed source only when that is smaller. Use
+`--context-mode focused` to always send selected excerpts, or
+`--context-mode repository` to require a complete safe indexed-source packet.
+
 ## Measure retrieval locally
 
 `evaluate` scores Brainstem against labelled tasks that you keep locally. A

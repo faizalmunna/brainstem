@@ -54,6 +54,43 @@ def test_retrieve_falls_back_to_path_match_when_no_symbol_matches(tmp_path):
     assert any(h.file == "widgets/renderer.py" and h.reason == "file path match" for h in hits)
 
 
+def test_bounded_source_text_match_finds_implementation_words_not_in_symbols_or_paths(tmp_path):
+    graph = _build(
+        tmp_path,
+        {
+            "lib/application.py": "# Register middleware and dispatch each request.\n\ndef use():\n    pass\n",
+            "tests/test_middleware.py": "# Register middleware and dispatch each request.\n\ndef test_use():\n    pass\n",
+        },
+    )
+
+    hits = RetrievalEngine(graph, repo_root=tmp_path).retrieve(
+        "where is middleware registered and request dispatch handled", limit=5
+    )
+
+    assert hits[0].file == "lib/application.py"
+    assert hits[0].reason == "bounded source text match"
+
+
+def test_bounded_source_text_match_does_not_persist_or_scan_without_repository_root(tmp_path):
+    graph = _build(tmp_path, {"lib/application.py": "# middleware dispatch request\n"})
+
+    assert RetrievalEngine(graph).retrieve("middleware request dispatch", limit=5) == []
+
+
+def test_bounded_source_text_match_understands_common_code_vocabulary(tmp_path):
+    graph = _build(
+        tmp_path,
+        {"lib/application.py": "def router_handle(req):\n    return req\n"},
+    )
+
+    hits = RetrievalEngine(graph, repo_root=tmp_path).retrieve(
+        "where is middleware request dispatch handled", limit=5
+    )
+
+    assert hits[0].file == "lib/application.py"
+    assert hits[0].reason == "bounded source text match"
+
+
 def test_retrieve_empty_query_returns_nothing(tmp_path):
     graph = _build(tmp_path, {"a.py": "def f(): pass\n"})
     engine = RetrievalEngine(graph)

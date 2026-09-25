@@ -78,7 +78,7 @@ def build_server(ws: Workspace, profile: AgentProfile | None = None) -> FastMCP:
         require_permission("query_context", profile)
         if ws.graph is None:
             return []
-        engine = RetrievalEngine(ws.graph, ws.vector_store)
+        engine = RetrievalEngine(ws.graph, ws.vector_store, repo_root=ws.repo_root)
         return [
             {
                 "file": hit.file,
@@ -105,7 +105,7 @@ def build_server(ws: Workspace, profile: AgentProfile | None = None) -> FastMCP:
             return {"error": f"limit must be between 1 and {MAX_BUNDLE_HITS}"}
         if ws.graph is None:
             return {"excerpts": [], "total_chars": 0, "truncated": False, "skipped": 0}
-        engine = RetrievalEngine(ws.graph, ws.vector_store)
+        engine = RetrievalEngine(ws.graph, ws.vector_store, repo_root=ws.repo_root)
         try:
             bundle = build_context_bundle(
                 ws.repo_root, engine.retrieve(question, limit=limit), max_chars=max_chars
@@ -133,6 +133,7 @@ def build_server(ws: Workspace, profile: AgentProfile | None = None) -> FastMCP:
         limit: int = 5,
         max_chars: int = DEFAULT_PACKET_CHARS,
         max_packet_chars: int = DEFAULT_PACKET_TOTAL_CHARS,
+        context_mode: str = "auto",
     ) -> dict:
         """Compile small, explainable local evidence before coding a task.
 
@@ -159,6 +160,7 @@ def build_server(ws: Workspace, profile: AgentProfile | None = None) -> FastMCP:
                 limit=limit,
                 max_chars=max_chars,
                 max_packet_chars=max_packet_chars,
+                context_mode=context_mode,
             )
         except ValueError as exc:
             return {"error": str(exc), "packet_version": 1}
@@ -170,7 +172,7 @@ def build_server(ws: Workspace, profile: AgentProfile | None = None) -> FastMCP:
         require_permission("find_related", profile)
         if ws.graph is None:
             return []
-        engine = RetrievalEngine(ws.graph, ws.vector_store)
+        engine = RetrievalEngine(ws.graph, ws.vector_store, repo_root=ws.repo_root)
         return [
             {"file": hit.file, "symbol": hit.symbol, "kind": hit.kind, "score": hit.score, "reason": hit.reason}
             for hit in engine.retrieve(file_or_symbol, limit=limit)

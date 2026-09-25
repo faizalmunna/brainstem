@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 from ..indexer.graph import RepoGraph
 
@@ -38,6 +39,45 @@ _STOPWORDS = {
     "do", "does", "did", "doing",
     "of", "to", "in", "on", "at", "for", "with", "by", "from", "as",
     "and", "or", "this", "that", "it", "its",
+}
+
+# A graph's symbols and paths are a fast, explainable first pass, but they do
+# not contain words used only in a function body or its comments.  The bounded
+# fallback below fills that gap without storing extra source-derived terms in
+# the on-disk index.  That matters for both privacy (the index is not a second
+# copy of source text) and predictable interactive latency.
+MAX_CONTENT_FALLBACK_FILES = 500
+MAX_CONTENT_FALLBACK_BYTES = 2_000_000
+MAX_CONTENT_FALLBACK_FILE_BYTES = 256_000
+MIN_CONTENT_MATCHES = 2
+_SENSITIVE_FILENAMES = {"id_rsa", "id_dsa", "id_ecdsa", "id_ed25519", "credentials", "secrets"}
+_SENSITIVE_SUFFIXES = {".pem", ".key", ".p12", ".pfx"}
+_TEST_PATH_PARTS = {"test", "tests", "spec", "specs", "__tests__"}
+_TEST_QUERY_TERMS = {"test", "tests", "regression", "coverage", "assert", "verify", "validation", "spec", "specs"}
+_SUPPORT_PATH_PARTS = _TEST_PATH_PARTS | {"example", "examples", "doc", "docs", "benchmark", "benchmarks"}
+# Small, code-idiom expansions are used only by the bounded source-text
+# fallback.  They bridge common natural-language/API vocabulary without
+# polluting deterministic symbol/path ranking or pretending to be a semantic
+# model.  Each original query term remains one scoring group, so aliases do
+# not inflate a file's score.
+_CONTENT_QUERY_ALIASES = {
+    "request": {"req"},
+    "response": {"res"},
+    "dispatch": {"handle", "handler"},
+    "dispatched": {"handle", "handler"},
+    "dispatcher": {"handle", "handler"},
+    "register": {"registered", "registration", "use", "mount"},
+    "registered": {"register", "registration", "use", "mount"},
+    "registration": {"register", "registered", "use", "mount"},
+    "middleware": {"router", "interceptor", "filter"},
+    "route": {"router", "routing"},
+    "routing": {"route", "router"},
+    "validate": {"validation", "validator"},
+    "validation": {"validate", "validator"},
+    "authenticate": {"authentication", "authorize"},
+    "authentication": {"authenticate", "authorize"},
+    "authorize": {"authorization", "permission"},
+    "authorization": {"authorize", "permission"},
 }
 
 
@@ -107,6 +147,23 @@ def _overlap(query_tokens: set[str], other_tokens: set[str]) -> set[str]:
     return matched
 
 
+def _content_query_groups(query_tokens: set[str]) -> dict[str, set[str]]:
+    """Build one source-match group per original query term.
+
+    Keeping groups separate means a file mentioning both ``router`` and
+    ``use`` earns one match for a user's single ``middleware`` term, rather
+    than incorrectly looking twice as relevant.
+    """
+    return {
+        token: {token, *_CONTENT_QUERY_ALIASES.get(token, set())}
+        for token in query_tokens
+    }
+
+
+def _content_overlap(groups: dict[str, set[str]], source_tokens: set[str]) -> set[str]:
+    return {term for term, variants in groups.items() if variants & source_tokens}
+
+
 @dataclass(frozen=True, slots=True)
 class RetrievalHit:
     file: str
@@ -118,12 +175,107 @@ class RetrievalHit:
 
 
 class RetrievalEngine:
-    def __init__(self, graph: RepoGraph, vector_store=None) -> None:
+    def __init__(self, graph: RepoGraph, vector_store=None, *, repo_root: Path | None = None) -> None:
         self.graph = graph
         # Deterministic retrieval works fully with vector_store=None. When
         # available, vectors only add candidates the lexical/graph passes
         # missed; they never replace the explainable base ranking.
         self.vector_store = vector_store
+        self.repo_root = repo_root.resolve() if repo_root is not None else None
+
+    @staticmethod
+    def _is_sensitive_path(path: Path) -> bool:
+        name = path.name.lower()
+        return (
+            (name.startswith(".env") and not name.endswith(".example"))
+            or name in _SENSITIVE_FILENAMES
+            or path.suffix.lower() in _SENSITIVE_SUFFIXES
+        )
+
+    @staticmethod
+    def _is_test_path(path: str) -> bool:
+        return bool(_TEST_PATH_PARTS & {part.lower() for part in Path(path).parts})
+
+    @staticmethod
+    def _is_support_path(path: str) -> bool:
+        return bool(_SUPPORT_PATH_PARTS & {part.lower() for part in Path(path).parts})
+
+    def _content_hits(self, query_tokens: set[str]) -> list[RetrievalHit]:
+        """Return bounded, non-persistent source-text candidates.
+
+        This deliberately runs only when the caller supplied a repository
+        root.  Callers that hold graph metadata alone retain the original
+        symbols/path-only behavior.  Files are resolved under that root,
+        sensitive names are skipped, and both per-file and total read budgets
+        make the fallback safe for interactive use on large repositories.
+        """
+        if self.repo_root is None or len(query_tokens) < MIN_CONTENT_MATCHES:
+            return []
+
+        root = self.repo_root
+        groups = _content_query_groups(query_tokens)
+        scanned_files = 0
+        scanned_bytes = 0
+        asks_for_tests = bool(query_tokens & _TEST_QUERY_TERMS)
+        hits: list[RetrievalHit] = []
+        for rel in sorted(self.graph.files):
+            if scanned_files >= MAX_CONTENT_FALLBACK_FILES or scanned_bytes >= MAX_CONTENT_FALLBACK_BYTES:
+                break
+            try:
+                candidate = (root / rel).resolve()
+                candidate.relative_to(root)
+                size = candidate.stat().st_size
+            except (OSError, ValueError):
+                continue
+            if (
+                not candidate.is_file()
+                or self._is_sensitive_path(candidate)
+                or size > MAX_CONTENT_FALLBACK_FILE_BYTES
+                or scanned_bytes + size > MAX_CONTENT_FALLBACK_BYTES
+            ):
+                continue
+            try:
+                text = candidate.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            if "\x00" in text:
+                continue
+            scanned_files += 1
+            scanned_bytes += size
+            overlap = _content_overlap(groups, _tokenize(text))
+            if len(overlap) < MIN_CONTENT_MATCHES:
+                continue
+
+            # Prefer exact vocabulary overlap in production code for a normal
+            # implementation question.  A test remains eligible, and loses
+            # that small preference only when the question itself is not
+            # asking for test/verification work.
+            score = 1.0 + 1.2 * (len(overlap) / len(query_tokens))
+            if not asks_for_tests and self._is_support_path(rel):
+                # Examples/docs can explain an API and tests can verify it,
+                # but an implementation request should inspect production
+                # code first when it offers equivalent vocabulary coverage.
+                score -= 0.6 if self._is_test_path(rel) else 0.4
+
+            line = next(
+                (
+                    number
+                    for number, source_line in enumerate(text.splitlines(), start=1)
+                    if len(_content_overlap(groups, _tokenize(source_line))) >= 2
+                ),
+                1,
+            )
+            hits.append(
+                RetrievalHit(
+                    file=rel,
+                    symbol=None,
+                    kind=None,
+                    line=line,
+                    score=score,
+                    reason="bounded source text match",
+                )
+            )
+        return hits
 
     def retrieve(self, query: str, limit: int = 10) -> list[RetrievalHit]:
         query_tokens = _tokenize(query, filter_stopwords=True)
@@ -201,11 +353,23 @@ class RetrievalEngine:
                     )
                 )
 
-        # Pass 3: semantic fallback, only for files the lexical/graph
+        # Pass 3: bounded source-text fallback.  This runs only when the
+        # fast metadata passes did not yield two distinct production files.
+        # It therefore repairs vocabulary-only misses without making broad
+        # source scanning the normal retrieval path or crowding out clear
+        # symbol/path evidence.
+        surfaced = {h.file for h in hits}
+        production_files = {hit.file for hit in hits if not self._is_support_path(hit.file)}
+        if len(production_files) < min(2, limit):
+            for hit in self._content_hits(query_tokens):
+                if hit.file not in surfaced:
+                    hits.append(hit)
+                    surfaced.add(hit.file)
+
+        # Pass 4: semantic fallback, only for files the lexical/graph/text
         # passes above didn't already surface -- catches the "right file,
         # wrong vocabulary" case token overlap structurally can't.
         if self.vector_store is not None:
-            surfaced = {h.file for h in hits}
             for doc_id, score, _meta in self.vector_store.search(query, limit=limit):
                 if doc_id not in surfaced:
                     hits.append(

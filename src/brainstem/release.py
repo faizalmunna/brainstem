@@ -121,6 +121,14 @@ def release_readiness(repo_root: Path) -> ReleaseReport:
             "uses: ./.github/workflows/release-artifacts.yml",
         )
     ) and "workflow_call:" in release_workflow
+    cross_architecture_ci = all(
+        marker in ci
+        for marker in (
+            "docker/setup-qemu-action@v3",
+            "--platform linux/arm64",
+            "MCP_TEST_TIMEOUT_S=60",
+        )
+    )
 
     checks = [
         ReleaseCheck(
@@ -210,6 +218,13 @@ def release_readiness(repo_root: Path) -> ReleaseReport:
             "Release artifact creation waits for the full CI matrix on version tags"
             if tag_gated_release
             else "Make the tag release job depend on security, Windows/Linux/macOS, npm, and Docker checks",
+        ),
+        ReleaseCheck(
+            "Cross-architecture Docker configuration",
+            cross_architecture_ci,
+            "Linux x86_64 and ARM64 portability/npm tests are configured"
+            if cross_architecture_ci
+            else "Add ARM64 runtime and npm smoke tests with QEMU to CI",
         ),
         ReleaseCheck(
             "Clean Git worktree",

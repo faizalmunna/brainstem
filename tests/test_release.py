@@ -24,7 +24,8 @@ def _write_release_files(root):
         "ubuntu-latest\nmacos-latest\nwindows-latest\nnpm install\nbrainstem sbom\n"
         "startsWith(github.ref, 'refs/tags/v')\n"
         "needs: [security, python, npm-wrapper, docker-image]\n"
-        "uses: ./.github/workflows/release-artifacts.yml\n",
+        "uses: ./.github/workflows/release-artifacts.yml\n"
+        "docker/setup-qemu-action@v3\n--platform linux/arm64\nMCP_TEST_TIMEOUT_S=60\n",
         encoding="utf-8",
     )
     (root / ".github" / "workflows" / "release-artifacts.yml").write_text(
@@ -61,6 +62,7 @@ def test_release_check_accepts_complete_source_controls(tmp_path, monkeypatch):
 
     assert report.ready is True
     assert any(check.name == "Tag-gated cross-platform release" and check.passed for check in report.checks)
+    assert any(check.name == "Cross-architecture Docker configuration" and check.passed for check in report.checks)
 
 
 def test_release_check_rejects_mismatched_repository_identity(tmp_path, monkeypatch):

@@ -106,16 +106,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Enable ARM64 emulation for cross-architecture checks
+        uses: docker/setup-qemu-action@v3
       - name: Run the locked test suite inside Linux Docker
         run: docker build --target test --tag brainstem:test .
+      - name: Run the portability-critical suite on Linux ARM64
+        run: >-
+          docker build --platform linux/arm64 --build-arg MCP_TEST_TIMEOUT_S=60
+          --target arm-test --tag brainstem:test-arm64 .
       - name: Install and launch the packed npm artifact inside Linux Docker
         run: docker build --target npm-test --tag brainstem:npm-test .
+      - name: Install and launch the packed npm artifact on Linux ARM64
+        run: docker build --platform linux/arm64 --target npm-test --tag brainstem:npm-test-arm64 .
       - name: Build locked, non-root runtime image
         run: docker build --tag brainstem:ci .
+      - name: Build locked, non-root ARM64 runtime image
+        run: docker build --platform linux/arm64 --tag brainstem:ci-arm64 .
       - name: Run CLI without a writable root filesystem
         run: docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m brainstem:ci --help
+      - name: Run ARM64 CLI without a writable root filesystem
+        run: >-
+          docker run --rm --platform linux/arm64 --read-only
+          --tmpfs /tmp:rw,noexec,nosuid,size=64m brainstem:ci-arm64 --help
       - name: Record tested image identity
-        run: docker image inspect brainstem:ci > docker-image-evidence.json
+        run: docker image inspect brainstem:ci brainstem:ci-arm64 > docker-image-evidence.json
       - name: Retain Docker evidence
         uses: actions/upload-artifact@v4
         with:

@@ -17,9 +17,29 @@ FROM builder AS test
 # Keep a Linux test path adjacent to the release build. This stage is never
 # shipped in the runtime image; it proves the same locked source graph that the
 # final image installs.
+ARG MCP_TEST_TIMEOUT_S=10
+ENV BRAINSTEM_TEST_MCP_TIMEOUT_S=${MCP_TEST_TIMEOUT_S}
 COPY tests ./tests
 RUN uv sync --locked --extra dev \
     && uv run pytest -q --ignore=tests/test_docker_distribution.py
+
+FROM builder AS arm-test
+# QEMU validates installed ARM64 wheels and the portability-critical runtime
+# paths. A focused suite keeps this emulated gate practical; native runners
+# continue to execute the complete suite.
+ARG MCP_TEST_TIMEOUT_S=60
+ENV BRAINSTEM_TEST_MCP_TIMEOUT_S=${MCP_TEST_TIMEOUT_S}
+COPY tests ./tests
+RUN uv sync --locked --extra dev \
+    && uv run pytest -q \
+        tests/test_cli.py \
+        tests/test_indexer.py \
+        tests/test_manifest.py \
+        tests/test_mcp_stdio.py \
+        tests/test_memory.py \
+        tests/test_retrieval.py \
+        tests/test_skills.py \
+        tests/test_task_packet.py
 
 FROM node:20-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS npm-test
 # Exercise the published npm artifact in Linux. The wrapper must create its

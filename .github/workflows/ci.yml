@@ -9,6 +9,31 @@ permissions:
   contents: read
 
 jobs:
+  security:
+    name: Dependency and static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: uv lock --check
+      - run: uv sync --extra dev --locked
+      - name: Audit locked Python dependencies
+        run: uv run --with pip-audit pip-audit --strict
+      - name: Reject medium- and high-severity Python findings
+        run: uv run --with bandit bandit -r src/brainstem -q -ll
+      - name: Assert that the npm launcher has no runtime dependency tree
+        working-directory: npm
+        run: >-
+          node -e "const p=require('./package.json'); if (p.dependencies || p.optionalDependencies || p.peerDependencies) throw new Error('npm wrapper must stay dependency-free'); console.log('npm wrapper has no runtime dependencies');"
+
   python:
     name: Python (${{ matrix.os }})
     strategy:
@@ -39,7 +64,7 @@ jobs:
 
   npm-wrapper:
     name: npm install (${{ matrix.os }})
-    needs: python
+    needs: [security, python]
     strategy:
       fail-fast: false
       matrix:
@@ -68,7 +93,7 @@ jobs:
 
   docker-image:
     name: Docker image (Linux)
-    needs: python
+    needs: [security, python]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

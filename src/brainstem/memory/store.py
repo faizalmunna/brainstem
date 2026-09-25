@@ -1,38 +1,8 @@
-"""Embedded memory store: decisions, bug/fix history, rules, and skill
-usage -- the "Repository/Project Memory" and "Skill Memory" tiers from
-the plan's hierarchical memory design (A12). "Working Memory" (the
-current task's in-flight context) deliberately isn't stored here at all:
-it belongs to the calling agent's own context window, not to brainstem --
-this store only holds what should survive past one session. "Agent
-Memory" (A12) is a thin `agent` scope column on the same facts table
-rather than a separate store: an agent-scoped fact is still a fact, just
-attributed to one profile instead of the whole repo, which is enough to
-answer "what has *this* agent specifically learned" without standing up
-parallel infrastructure for it. "Long-Term Knowledge" (A12) for a
-single-repo tool is just this same table with no expiry -- there's no
-separate cross-project store in V1.
+"""Embedded, durable repository memory backed by SQLite.
 
-Backs the plan's "no external DB required to run V1" requirement (Q10):
-sqlite3 is stdlib, ships with Python, and needs no server process. Search
-is LIKE-based full text for now -- deterministic and dependency-free. A
-VectorStore-backed semantic search (see adapters/base.py) is a precision
-upgrade for V2, not a V1 requirement: the plan's own research flagged that
-LLM-built graphs are the wrong foundation (GraphRAG went into maintenance
-mode for exactly this reason) and that deterministic retrieval should be
-the default, with embeddings as an optional ranking boost.
-
-Implements the `GraphBackend` adapter interface (`add_fact`/`query_facts`)
-in addition to its own richer, more specific API (`record`/`search`/
-`list`) -- found missing during a requirements audit: the interface
-existed in adapters/base.py specifically so the memory backend could be
-swapped (e.g. for a future Graphiti-backed implementation, per the plan's
-"Open Decisions"), but nothing actually implemented it, so the
-swappability claim was not true in practice. The
-`record`/`search`/`list` methods remain the primary API for callers in
-this codebase (mcp_server.py, cli.py) since they're more specific than
-the generic interface; `add_fact`/`query_facts` exist so code written
-against `GraphBackend` (a future caller that doesn't know it's talking to
-sqlite specifically) also works.
+It records decisions, rules, history, source-reference hashes, and skill-use
+outcomes without requiring an external service. The store also implements the
+generic :class:`GraphBackend` interface, while retaining its richer local API.
 """
 
 from __future__ import annotations
@@ -185,35 +155,44 @@ class MemoryStore(GraphBackend):
         self, query: str, kind: str | None = None, limit: int = 10, scope: str | None = None
     ) -> list[dict[str, Any]]:
         like = f"%{query}%"
-        clauses = ["(title LIKE ? OR body LIKE ? OR tags LIKE ?)"]
-        params: list[Any] = [like, like, like]
-        if kind:
-            clauses.append("kind = ?")
-            params.append(kind)
-        if scope:
-            clauses.append("scope = ?")
-            params.append(scope)
-        params.append(limit)
-        rows = self._conn.execute(
-            f"SELECT * FROM facts WHERE {' AND '.join(clauses)} ORDER BY created_at DESC LIMIT ?",
-            params,
-        ).fetchall()
+        if kind and scope:
+            statement = (
+                "SELECT * FROM facts WHERE (title LIKE ? OR body LIKE ? OR tags LIKE ?) "
+                "AND kind = ? AND scope = ? ORDER BY created_at DESC LIMIT ?"
+            )
+            params: tuple[Any, ...] = (like, like, like, kind, scope, limit)
+        elif kind:
+            statement = (
+                "SELECT * FROM facts WHERE (title LIKE ? OR body LIKE ? OR tags LIKE ?) "
+                "AND kind = ? ORDER BY created_at DESC LIMIT ?"
+            )
+            params = (like, like, like, kind, limit)
+        elif scope:
+            statement = (
+                "SELECT * FROM facts WHERE (title LIKE ? OR body LIKE ? OR tags LIKE ?) "
+                "AND scope = ? ORDER BY created_at DESC LIMIT ?"
+            )
+            params = (like, like, like, scope, limit)
+        else:
+            statement = "SELECT * FROM facts WHERE (title LIKE ? OR body LIKE ? OR tags LIKE ?) ORDER BY created_at DESC LIMIT ?"
+            params = (like, like, like, limit)
+        rows = self._conn.execute(statement, params).fetchall()
         return [dict(r) for r in rows]
 
     def list(self, kind: str | None = None, limit: int = 50, scope: str | None = None) -> list[dict[str, Any]]:
-        clauses = []
-        params: list[Any] = []
-        if kind:
-            clauses.append("kind = ?")
-            params.append(kind)
-        if scope:
-            clauses.append("scope = ?")
-            params.append(scope)
-        where = f"WHERE {' AND '.join(clauses)} " if clauses else ""
-        params.append(limit)
-        rows = self._conn.execute(
-            f"SELECT * FROM facts {where}ORDER BY created_at DESC LIMIT ?", params
-        ).fetchall()
+        if kind and scope:
+            statement = "SELECT * FROM facts WHERE kind = ? AND scope = ? ORDER BY created_at DESC LIMIT ?"
+            params: tuple[Any, ...] = (kind, scope, limit)
+        elif kind:
+            statement = "SELECT * FROM facts WHERE kind = ? ORDER BY created_at DESC LIMIT ?"
+            params = (kind, limit)
+        elif scope:
+            statement = "SELECT * FROM facts WHERE scope = ? ORDER BY created_at DESC LIMIT ?"
+            params = (scope, limit)
+        else:
+            statement = "SELECT * FROM facts ORDER BY created_at DESC LIMIT ?"
+            params = (limit,)
+        rows = self._conn.execute(statement, params).fetchall()
         return [dict(r) for r in rows]
 
     # -- Skill memory: which skills actually helped, for which work. --

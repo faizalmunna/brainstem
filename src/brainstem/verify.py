@@ -83,6 +83,8 @@ def _runner_argv(repo_root: Path, argv: list[str], runner: str, docker_image: st
     if "," in mount_source:
         raise ValueError("Docker verification refuses repository paths containing ',' in mount syntax")
     mount = f"type=bind,src={mount_source},dst=/workspace,readonly"
+    # A fixed path inside the isolated container tmpfs, not a host temporary directory.
+    tmpfs_mount = "/tmp:rw,noexec,nosuid,size=256m"  # nosec B108
     return [
         "docker",
         "run",
@@ -105,7 +107,7 @@ def _runner_argv(repo_root: Path, argv: list[str], runner: str, docker_image: st
         "--cpus",
         "2",
         "--tmpfs",
-        "/tmp:rw,noexec,nosuid,size=256m",
+        tmpfs_mount,
         "--mount",
         mount,
         "--workdir",

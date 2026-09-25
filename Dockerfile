@@ -3,7 +3,7 @@
 # the resulting virtual environment into the small non-root runtime image.
 FROM ghcr.io/astral-sh/uv:0.11.7@sha256:240fb85ab0f263ef12f492d8476aa3a2e4e1e333f7d67fbdd923d00a506a516a AS uv
 
-FROM python:3.11-slim@sha256:da047cb8f9d1d98e5c070f5300ba9f7274e33b8fc0e5be5ed88740aed1b95ba9 AS builder
+FROM python:3.14-slim@sha256:caaf356f40667c496d405780745b9ac25771c189a51dfcc42430d531ea09f8a2 AS builder
 # Build at the virtualenv's final absolute location. Console-script shebangs
 # embed that path, so copying a venv built under another directory would make
 # the runtime entrypoint non-executable.
@@ -58,7 +58,7 @@ RUN cd npm \
     && npm install /workspace/npm/*.tgz \
     && npx --no-install brainstem --help
 
-FROM python:3.11-slim@sha256:da047cb8f9d1d98e5c070f5300ba9f7274e33b8fc0e5be5ed88740aed1b95ba9
+FROM python:3.14-slim@sha256:caaf356f40667c496d405780745b9ac25771c189a51dfcc42430d531ea09f8a2
 LABEL org.opencontainers.image.title="Brainstem" \
       org.opencontainers.image.description="Local, model-neutral repository intelligence for MCP coding agents" \
       org.opencontainers.image.licenses="MIT"

@@ -1,0 +1,30 @@
+{
+  "format_version": 1,
+  "cases": [
+    {
+      "id": "python-relative-import",
+      "query": "where is login token validation implemented",
+      "required_files": ["python/auth/tokens.py"]
+    },
+    {
+      "id": "typescript-cache",
+      "query": "where is the request cache invalidated",
+      "required_files": ["typescript/cache.ts"]
+    },
+    {
+      "id": "go-authentication",
+      "query": "check internal authentication token",
+      "required_files": ["go/internal/auth/auth.go"]
+    },
+    {
+      "id": "java-login",
+      "query": "authenticate a login request",
+      "required_files": ["java/src/main/java/com/example/auth/AuthService.java"]
+    },
+    {
+      "id": "rust-configuration",
+      "query": "parse runtime configuration",
+      "required_files": ["rust/src/config.rs"]
+    }
+  ]
+}

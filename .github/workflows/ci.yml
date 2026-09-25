@@ -107,7 +107,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Enable ARM64 emulation for cross-architecture checks
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
       - name: Run the locked test suite inside Linux Docker
         run: docker build --target test --tag brainstem:test .
       - name: Run the portability-critical suite on Linux ARM64

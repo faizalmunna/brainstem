@@ -56,7 +56,7 @@ jobs:
       - name: Generate locked-runtime SBOM
         run: uv run brainstem sbom --path . --output sbom.cdx.json
       - name: Retain release evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-evidence-${{ matrix.os }}
           path: |
@@ -94,7 +94,7 @@ jobs:
           npm install ../npm/*.tgz
           npx --no-install brainstem --help > npm-install-evidence.txt
       - name: Retain npm clean-install evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: npm-install-evidence-${{ matrix.os }}
           path: npm-install-smoke/npm-install-evidence.txt
@@ -131,7 +131,7 @@ jobs:
       - name: Record tested image identity
         run: docker image inspect brainstem:ci brainstem:ci-arm64 > docker-image-evidence.json
       - name: Retain Docker evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: docker-image-evidence-ubuntu
           path: docker-image-evidence.json

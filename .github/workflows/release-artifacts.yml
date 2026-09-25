@@ -46,7 +46,7 @@ jobs:
             dist/*.tgz
           sbom-path: dist/sbom.cdx.json
       - name: Retain attested release artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: brainstem-release-${{ github.ref_name }}
           path: dist/

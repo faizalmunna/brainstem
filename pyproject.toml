@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "A portable, model-agnostic AI engineering brain: repo intelligence, memory, and skills exposed over MCP to any coding agent."
 readme = "README.md"
 authors = [
-    { name = "Faizal", email = "155811377+iam5zal@users.noreply.github.com" }
+    { name = "Faizal Munna", email = "25580043+faizalmunna@users.noreply.github.com" }
 ]
 requires-python = ">=3.11"
 dependencies = [

@@ -124,7 +124,7 @@ def query(
         typer.echo("No index found. Run `brainstem index` first.", err=True)
         raise typer.Exit(code=1)
 
-    engine = RetrievalEngine(ws.graph, ws.vector_store if semantic else None)
+    engine = RetrievalEngine(ws.graph, ws.vector_store if semantic else None, repo_root=ws.repo_root)
     for hit in engine.retrieve(question, limit=limit):
         loc = f":{hit.line}" if hit.line else ""
         sym = f" [{hit.kind}] {hit.symbol}" if hit.symbol else ""
@@ -139,6 +139,11 @@ def prepare_task(
     max_chars: int = typer.Option(8_000, "--max-chars", help="Maximum source characters in the packet."),
     max_packet_chars: int = typer.Option(
         12_000, "--max-packet-chars", help="Hard cap for the complete compact JSON task packet."
+    ),
+    context_mode: str = typer.Option(
+        "auto",
+        "--context-mode",
+        help="auto chooses the smaller safe payload; focused always retrieves selected excerpts; repository requests full safe indexed source.",
     ),
     semantic: bool = typer.Option(
         True,
@@ -167,6 +172,7 @@ def prepare_task(
             limit=limit,
             max_chars=max_chars,
             max_packet_chars=max_packet_chars,
+            context_mode=context_mode,
         )
     except ValueError as exc:
         typer.echo(str(exc), err=True)

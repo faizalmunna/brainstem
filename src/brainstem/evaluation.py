@@ -160,7 +160,7 @@ def evaluate_retrieval(
         )
 
     corpus_chars = _indexed_source_chars(repo_root, graph)
-    engine = RetrievalEngine(graph, vector_store)
+    engine = RetrievalEngine(graph, vector_store, repo_root=repo_root)
     results: list[dict[str, Any]] = []
     recalls: list[float] = []
     reciprocal_ranks: list[float] = []
@@ -206,6 +206,7 @@ def evaluate_retrieval(
                 "first_relevant_rank": first_rank,
                 "reciprocal_rank": _round(reciprocal_rank),
                 "packet_chars": packet_chars,
+                "context_mode": str(packet["context_mode"]),
                 "context_char_reduction_ratio": _round(reduction),
             }
         )
@@ -226,6 +227,10 @@ def evaluate_retrieval(
             "mean_reciprocal_rank": _round(fmean(reciprocal_ranks)),
             "mean_packet_chars": _round(fmean(packet_sizes)),
             "mean_context_char_reduction_ratio": _round(fmean(reductions)),
+            "context_mode_counts": {
+                mode: sum(case["context_mode"] == mode for case in results)
+                for mode in sorted({str(case["context_mode"]) for case in results})
+            },
         },
         "cases": results,
     }

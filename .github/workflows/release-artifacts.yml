@@ -1,14 +1,11 @@
 name: Release artifacts
 
 on:
-  push:
-    tags:
-      - "v*"
-  workflow_dispatch:
+  workflow_call:
 
-# This workflow creates reviewable, signed artifacts. It intentionally does
-# not publish to PyPI or npm: registry ownership and publishing policy are
-# maintainer decisions, and no package/repository identity is guessed here.
+# Called only by the tag-gated CI job after its Windows/Linux/macOS matrix and
+# Docker/npm smoke tests have succeeded. It creates reviewable, signed
+# artifacts but intentionally does not publish to PyPI or npm.
 permissions:
   contents: read
   id-token: write

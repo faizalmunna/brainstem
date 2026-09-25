@@ -12,6 +12,10 @@ def test_docker_image_uses_locked_dependencies_and_non_root_runtime():
     assert "WORKDIR /opt/brainstem" in dockerfile
     assert "uv sync --locked --no-dev --no-editable" in dockerfile
     assert "COPY --from=builder /opt/brainstem/.venv /opt/brainstem/.venv" in dockerfile
+    assert "FROM builder AS test" in dockerfile
+    assert "uv sync --locked --extra dev" in dockerfile
+    assert "FROM node:20-bookworm-slim@sha256:" in dockerfile
+    assert "FROM node:20-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS npm-test" in dockerfile
     assert "USER brainstem:brainstem" in dockerfile
     assert 'ENTRYPOINT ["brainstem"]' in dockerfile
 

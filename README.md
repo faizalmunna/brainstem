@@ -139,8 +139,9 @@ The production gate is intentionally fail-closed: it requires matching public
 repository metadata, a real security reporting channel, a clean worktree, and
 configured supply-chain controls before a release is marked ready. A `v*` tag
 first passes the security, Windows/Linux/macOS, npm-install, and Docker checks;
-only then are release artifacts built and attested. It never publishes anything
-automatically.
+the Docker lane covers the full x86_64 suite plus portability-critical and npm
+checks on Linux ARM64. Only then are release artifacts built and attested. It
+never publishes anything automatically.
 
 ## License
 

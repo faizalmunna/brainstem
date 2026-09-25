@@ -13,6 +13,10 @@ def test_docker_image_uses_locked_dependencies_and_non_root_runtime():
     assert "uv sync --locked --no-dev --no-editable" in dockerfile
     assert "COPY --from=builder /opt/brainstem/.venv /opt/brainstem/.venv" in dockerfile
     assert "FROM builder AS test" in dockerfile
+    assert "ARG MCP_TEST_TIMEOUT_S=10" in dockerfile
+    assert "BRAINSTEM_TEST_MCP_TIMEOUT_S=${MCP_TEST_TIMEOUT_S}" in dockerfile
+    assert "FROM builder AS arm-test" in dockerfile
+    assert "tests/test_mcp_stdio.py" in dockerfile
     assert "uv sync --locked --extra dev" in dockerfile
     assert "FROM node:20-bookworm-slim@sha256:" in dockerfile
     assert "FROM node:20-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS npm-test" in dockerfile

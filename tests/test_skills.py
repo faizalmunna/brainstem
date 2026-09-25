@@ -135,6 +135,19 @@ def test_install_pack_custom_name(tmp_path):
     assert (repo_root / ".brain" / "skills" / "installed" / "renamed-pack").is_dir()
 
 
+@pytest.mark.parametrize("name", ["", ".", "..", "../outside", "nested/pack", r"nested\\pack", "C:pack"])
+def test_install_pack_rejects_path_like_custom_names(tmp_path, name):
+    source = tmp_path / "source-dir"
+    _write_skill(source / "x.md", "x")
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+
+    with pytest.raises(ValueError, match="pack name"):
+        install_pack(str(source), repo_root, name=name)
+
+    assert not (tmp_path / "outside").exists()
+
+
 def test_install_pack_refuses_to_overwrite_existing(tmp_path):
     source = tmp_path / "source-dir"
     _write_skill(source / "x.md", "x")
@@ -186,3 +199,16 @@ def test_remove_nonexistent_pack_raises(tmp_path):
     repo_root.mkdir()
     with pytest.raises(FileNotFoundError):
         remove_pack("does-not-exist", repo_root)
+
+
+@pytest.mark.parametrize("name", ["..", "../outside", "nested/pack", r"nested\\pack"])
+def test_remove_pack_rejects_path_like_names(tmp_path, name):
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+
+    with pytest.raises(ValueError, match="pack name"):
+        remove_pack(name, repo_root)
+
+    assert outside.is_dir()

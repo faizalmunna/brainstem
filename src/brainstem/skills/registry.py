@@ -6,11 +6,7 @@ adding a file, never touching core code or the MCP server's
 tool-dispatch logic.
 
 Skills are organized into **packs** -- a pack is a directory under
-`<root>/packs/<name>/` or `<root>/installed/<name>/` (see
-src/brainstem/skills_bundled/packs/README.md for the authoring guide and quality bar, and
-manager.py for how third-party packs get into `installed/`). This is the
-mechanism for scaling toward a real skill library without becoming the
-"namesake bloat" the project's own research explicitly warns against.
+`<root>/packs/<name>/` or `<root>/installed/<name>/`.
 
 Enable/disable (state.py) is the other half of the package-manager model:
 `list()`/`find_by_trigger()` hide disabled skills by default so a user
@@ -71,8 +67,10 @@ def _parse_skill_file(path: Path, pack: str) -> Skill | None:
     if not match:
         return None
     front_raw, body = match.groups()
-    front = yaml.load(front_raw, Loader=_YAML_LOADER) or {}
-    if "name" not in front:
+    # _YAML_LOADER is always SafeLoader or CSafeLoader; never accept Python
+    # object constructors from an installed skill manifest.
+    front = yaml.load(front_raw, Loader=_YAML_LOADER) or {}  # nosec B506
+    if not isinstance(front, dict) or "name" not in front:
         return None
     return Skill(
         name=str(front["name"]),

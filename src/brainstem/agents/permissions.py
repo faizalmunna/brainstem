@@ -1,9 +1,8 @@
-"""The permission model from the plan (Q9): "the permission model... is
-enforced by the brain's tool-dispatch layer on every call, not by trusting
-the LLM's behavior." This is what makes that concrete, rather than a claim
-in a docstring: `require_permission` wraps every MCP tool, and a caller
-whose AgentProfile doesn't grant the needed permission gets a real error,
-not a silently-executed call.
+"""Capability permissions enforced at the MCP dispatch boundary.
+
+Every exposed tool is guarded with ``require_permission``. A profile lacking
+the required capability receives an error rather than a silently executed
+action.
 """
 
 from __future__ import annotations

@@ -1,21 +1,9 @@
-"""LanceDB-backed VectorStore -- the plan's recommended default (Appendix
-Cluster C3: "LanceDB... embeddable, Rust core, no server" + "Nomic Embed
-Text v1.5... recommended general default", with all-MiniLM-L6-v2 as the
-"ultra-light fallback").
+"""Optional LanceDB-backed semantic ranking store.
 
-This is deliberately optional (`pip install brainstem[vector]`): the
-research explicitly says deterministic retrieval alone is sufficient to run
-V1 (Appendix Cluster C4 verdict). A VectorStore is a precision boost, not a
-requirement -- see retrieval/engine.py, which works fully without one.
-
-fastembed (ONNX-runtime-based, no torch) is used for embedding inference
-rather than sentence-transformers, matching the plan's "small footprint,
-no server" philosophy. BAAI/bge-small-en-v1.5 is fastembed's well-supported
-default and is on the plan's approved model list; nomic-ai/nomic-embed-
-text-v1.5 (the plan's stated first choice) can be substituted via the
-`model_name` argument once environment-specific fastembed/model-hub
-compatibility is confirmed -- noted rather than hard-coded, since that's
-exactly the kind of environment-dependent fact that shouldn't be assumed.
+Install it with ``brainstem[vector]`` when embeddings improve retrieval for a
+repository. Deterministic graph retrieval remains fully functional without
+this extra. Embeddings use fastembed's ONNX runtime rather than requiring
+PyTorch, and callers may select a compatible model with ``model_name``.
 """
 
 from __future__ import annotations

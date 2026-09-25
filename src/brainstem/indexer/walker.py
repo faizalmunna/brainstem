@@ -12,11 +12,9 @@ as a cold one, which should be structurally impossible if the walk itself
 were cheap. Pruning `dirnames` before `os.walk` descends is the standard,
 correct fix -- not a fallback path.
 
-Deliberately not shelling out to ripgrep for V1 (see the plan's own
-research: ripgrep is REUSE DIRECTLY-worthy, just not yet wired in) --
-pathspec gives the same gitignore-matching semantics as a pure-Python
-dependency, and the directory-pruning fix here closes the actual
-measured gap without adding an external binary dependency.
+The walker deliberately avoids an external binary dependency. `pathspec`
+provides the needed gitignore semantics in-process, while directory pruning
+removes the dominant cost of ignored trees.
 """
 
 from __future__ import annotations

@@ -1,12 +1,7 @@
-"""The token-efficiency pipeline itself: cache -> route -> call -> cache.
+"""Token-efficient completion pipeline: cache, route, call, then cache.
 
-This exists as infrastructure for brainstem's own future needs (V2 self-
-extension checks, e.g.) and as a directly usable utility (`brainstem ask`)
-today -- it is deliberately *not* wired into the Q8 MCP tool surface,
-because those tools answer deterministic repo questions and don't need an
-LLM call at all; conflating "the brain answers a question" with "the brain
-also proxies model calls" would blur exactly the boundary the plan's
-retrieval design is built to avoid crossing unnecessarily.
+It powers ``brainstem ask`` but is intentionally separate from deterministic
+MCP repository tools, which do not need to proxy model calls.
 """
 
 from __future__ import annotations
@@ -27,11 +22,9 @@ class BrokerResult:
 
 
 def _estimate_tokens(*texts: str) -> int:
-    # Deliberately crude (chars // 4): the plan's own token-savings ranking
-    # puts real leverage in *not sending* tokens (cache/routing/retrieval),
-    # not in precisely counting the ones that are sent. A provider-exact
-    # count (from response usage fields) is a natural upgrade once a
-    # specific backend's response shape is being parsed for more than text.
+    # This is an intentionally portable estimate. The larger saving comes from
+    # avoiding unnecessary context and duplicate calls; provider-specific usage
+    # accounting belongs in an individual backend adapter.
     return sum(len(t) for t in texts) // 4
 
 

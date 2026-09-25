@@ -1,14 +1,8 @@
-"""Exact-match request cache -- lever #2 in the plan's token-savings
-ranking (Appendix Cluster B verdict): "Semantic/exact caching in front of
-every LLM call... highest-ROI lever, provider-agnostic since it operates
-on text pre-routing."
+"""Provider-neutral exact-match request cache.
 
-Semantic (embedding-similarity) caching is a natural follow-up once the
-VectorStore adapter is in regular use (adapters/lancedb_store.py), but
-exact caching alone already captures the common case of an agent re-asking
-literally the same question (e.g. retried tool calls, repeated checks
-across a session) -- so it's implemented first rather than skipped in
-favor of the harder version.
+It avoids repeated provider calls for identical prompts, including retries and
+repeated checks within a session. Semantic caching can be layered on separately
+when a vector store is configured.
 """
 
 from __future__ import annotations

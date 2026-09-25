@@ -1,12 +1,7 @@
-"""Rule-based backend selection -- lever #3 in the plan's token-savings
-ranking: "Local-model routing... for cheap subtasks -- classification,
-extraction, routing -- instead of cloud calls. This is the largest raw-
-cost lever, not just token count."
+"""Rule-based backend selection with local preference and ordered fallback.
 
-V1's router is deliberately simple (prefer-local flag + ordered fallback
-list), not a learned/ML router: the plan explicitly scopes intelligent
-cost/quality/latency-aware routing as something to grow into once there's
-real usage data to route on, not something to fake with V1 heuristics.
+The router remains deliberately deterministic: a caller may prefer a local
+backend, then use the configured order of reachable providers.
 """
 
 from __future__ import annotations

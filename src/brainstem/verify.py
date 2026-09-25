@@ -1,17 +1,11 @@
-"""Deterministic verification: run a target repo's own build/lint/test
-commands and report real pass/fail with captured output, instead of
-trusting an LLM's self-assessment that generated code "looks correct"
-(the original vision's Understand->Plan->Implement->Compile->Lint->
-Typecheck->Test->...->Repair->Verify pipeline). Nothing in this repo
-previously stopped a bad generated change from looking fine to an agent
-and being wrong in practice.
+"""Deterministic verification for a target repository's own checks.
 
-Command detection is intentionally simple and override-friendly: a
-repo's own [verify] section in brain.toml (manifest.py) is authoritative
-when present; otherwise a small set of common project-file signals
-produces a reasonable default. Getting this perfectly right for every
-ecosystem isn't the goal -- giving a repo owner an easy, obvious way to
-configure it correctly once is.
+Configured build, lint, and test commands return captured pass/fail evidence
+instead of relying on an agent's assessment of a generated change.
+
+The repository's ``[verify]`` section in ``brain.toml`` is authoritative.
+When it is absent, a small set of common project-file signals provides a
+conservative default that owners can override.
 
 Commands are parsed to an argument vector and run with ``shell=False``. The
 MCP path only accepts commands from the repo owner's own brain.toml or

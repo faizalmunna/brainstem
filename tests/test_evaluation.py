@@ -1,4 +1,6 @@
 import json
+import shutil
+from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
@@ -8,6 +10,9 @@ from brainstem.evaluation import evaluate_retrieval, load_evaluation_cases
 from brainstem.indexer.graph import build_graph
 from brainstem.manifest import default_manifest, save_manifest
 from brainstem.memory.store import MemoryStore
+
+
+EVALUATION_FIXTURE = Path(__file__).parent / "fixtures" / "evaluation_v1"
 
 
 def _write_case_file(tmp_path, cases):
@@ -113,3 +118,20 @@ def test_evaluate_cli_uses_indexed_workspace_and_emits_json(tmp_path):
     assert result.exit_code == 0, result.output
     report = json.loads(result.output)
     assert report["summary"]["mean_recall_at_k"] == 1.0
+
+
+def test_synthetic_multilanguage_evaluation_fixture_is_a_stable_regression_guard(tmp_path):
+    """This fixture checks evaluator plumbing, not a production benchmark claim."""
+    repo = tmp_path / "evaluation-repo"
+    shutil.copytree(EVALUATION_FIXTURE, repo)
+    graph = build_graph(repo, default_manifest("evaluation-fixture"))
+    memory = MemoryStore(repo / ".brain" / "memory" / "facts.db")
+    try:
+        suite = load_evaluation_cases(repo / "cases.json")
+        report = evaluate_retrieval(repo, graph, memory, suite, limit=5)
+
+        assert report["summary"]["case_count"] == 5
+        assert report["summary"]["mean_recall_at_k"] == 1.0
+        assert all(not case["missing_files"] for case in report["cases"])
+    finally:
+        memory.close()

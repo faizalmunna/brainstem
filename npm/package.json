@@ -1,9 +1,9 @@
 {
-  "name": "brainstem",
+  "name": "@faizalmunna/brainstem",
   "version": "0.1.0",
   "description": "npm wrapper for brainstem, a portable AI engineering brain (repo intelligence, memory, skills) exposed over MCP to any coding agent. This is an installer/launcher for the real Python implementation, not a Node reimplementation -- see README.md.",
   "license": "MIT",
-  "author": "Faizal",
+  "author": "Faizal Munna",
   "bin": {
     "brainstem": "bin/brainstem.js"
   },

@@ -1,4 +1,4 @@
-# brainstem (npm wrapper)
+# @faizalmunna/brainstem (npm wrapper)
 
 This is an **installer/launcher for the real Python implementation** of
 brainstem — a portable AI engineering brain (repo intelligence, memory,
@@ -25,7 +25,7 @@ constraints instead of the lockfile.
 ## Install
 
 ```bash
-npm install -g brainstem
+npm install -g @faizalmunna/brainstem
 ```
 
 ## Use
@@ -42,12 +42,10 @@ brainstem serve --path /path/to/some/repo --profile readonly
 
 ## Why an npm wrapper for a Python tool?
 
-So `npx brainstem` / `npm install -g brainstem` works for people whose
+So `npx @faizalmunna/brainstem` / `npm install -g @faizalmunna/brainstem` works for people whose
 default toolchain is the Node/JS ecosystem, without needing them to know
-this is written in Python first. If you're already comfortable with
-Python tooling, installing the real package directly (`pip install
-brainstem` or `uv tool install brainstem`) skips the wrapper layer
-entirely and works identically.
+this is written in Python first. If you're working from a source checkout,
+`uv sync` followed by `uv run brainstem` skips the wrapper layer entirely.
 
 ## License
 

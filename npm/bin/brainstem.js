@@ -20,7 +20,7 @@ const binPath = venvBinary();
 if (!fs.existsSync(binPath)) {
   console.error(
     "brainstem: the Python environment hasn't been set up yet.\n" +
-      "Try reinstalling: `npm install -g brainstem` (this runs setup automatically)."
+      "Try reinstalling: `npm install -g @faizalmunna/brainstem` (this runs setup automatically)."
   );
   process.exit(1);
 }

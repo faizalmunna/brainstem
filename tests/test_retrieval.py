@@ -4,6 +4,12 @@ from brainstem.retrieval.context import MAX_BUNDLE_CHARS, build_context_bundle
 from brainstem.retrieval.engine import RetrievalEngine, RetrievalHit, _tokenize
 
 
+class _StubVectorStore:
+    def search(self, _query, limit=10):
+        assert limit >= 10
+        return [("semantic.py", 0.01, {})]
+
+
 def test_tokenize_splits_camel_case():
     assert _tokenize("RequestCache") == {"request", "cache"}
     assert _tokenize("HTTPServer") == {"http", "server"}
@@ -124,6 +130,38 @@ def test_retrieve_matches_past_tense_question_to_silent_e_symbol(tmp_path):
 
     assert hits[0].file == "indexer/graph.py"
     assert hits[0].symbol == "_resolve_python"
+
+
+def test_retrieve_matches_routing_vocabulary_to_a_resolver_symbol(tmp_path):
+    graph = _build(
+        tmp_path,
+        {
+            "django/urls/resolvers.py": "class URLResolver:\n    pass\n",
+            "django/shortcuts.py": "def resolve_url():\n    pass\n",
+        },
+    )
+    engine = RetrievalEngine(graph)
+
+    hits = engine.retrieve("trace how URL routing resolves", limit=1)
+
+    assert hits[0].file == "django/urls/resolvers.py"
+    assert hits[0].symbol == "URLResolver"
+
+
+def test_semantic_candidates_are_rank_fused_not_buried_by_incompatible_score_scales(tmp_path):
+    graph = _build(
+        tmp_path,
+        {
+            "first.py": "class Plugin:\n    pass\n",
+            "second.py": "class Server:\n    pass\n",
+            "semantic.py": "def start_middleware():\n    pass\n",
+        },
+    )
+    engine = RetrievalEngine(graph, vector_store=_StubVectorStore())
+
+    hits = engine.retrieve("plugin server", limit=2)
+
+    assert any(hit.file == "semantic.py" and hit.reason == "semantic match" for hit in hits)
 
 
 def test_retrieve_surfaces_dependency_neighbors_for_a_known_file(tmp_path):

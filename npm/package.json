@@ -4,6 +4,14 @@
   "description": "npm wrapper for brainstem, a portable AI engineering brain (repo intelligence, memory, skills) exposed over MCP to any coding agent. This is an installer/launcher for the real Python implementation, not a Node reimplementation -- see README.md.",
   "license": "MIT",
   "author": "Faizal Munna",
+  "homepage": "https://github.com/faizalmunna/brainstem",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/faizalmunna/brainstem.git"
+  },
+  "bugs": {
+    "url": "https://github.com/faizalmunna/brainstem/issues"
+  },
   "bin": {
     "brainstem": "bin/brainstem.js"
   },

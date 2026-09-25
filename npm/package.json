@@ -1,0 +1,36 @@
+{
+  "name": "brainstem",
+  "version": "0.1.0",
+  "description": "npm wrapper for brainstem, a portable AI engineering brain (repo intelligence, memory, skills) exposed over MCP to any coding agent. This is an installer/launcher for the real Python implementation, not a Node reimplementation -- see README.md.",
+  "license": "MIT",
+  "author": "Faizal",
+  "bin": {
+    "brainstem": "bin/brainstem.js"
+  },
+  "files": [
+    "bin",
+    "scripts",
+    "vendor",
+    "README.md"
+  ],
+  "scripts": {
+    "sync-vendor": "node scripts/sync-vendor.js",
+    "prepack": "node scripts/sync-vendor.js",
+    "postinstall": "node scripts/setup.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "ai",
+    "mcp",
+    "model-context-protocol",
+    "claude-code",
+    "codex",
+    "repo-intelligence",
+    "agent-skills"
+  ]
+}

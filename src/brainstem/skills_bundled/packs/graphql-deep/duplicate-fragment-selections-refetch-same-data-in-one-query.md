@@ -1,0 +1,35 @@
+---
+name: duplicate-fragment-selections-refetch-same-data-in-one-query
+description: A single GraphQL query re-executes the same expensive resolver logic multiple times because the same field is reached through separate fragments or aliases without request-level memoization.
+triggers: ["graphql same field resolved twice in one query", "fragment reuse causing duplicate database calls", "graphql query executes resolver multiple times for same object", "no request level cache graphql resolver"]
+permissions: ["READ"]
+---
+
+## Symptom
+Profiling a single GraphQL request shows the same underlying expensive operation (a database lookup, an external API call, a computed aggregation) executing multiple times for what is logically the same object and field, within one query execution -- not across separate requests, and not the classic list-based N+1 pattern -- typically because the query reaches the same data through more than one path: two different fragments spread on the same object, the same field requested via different aliases, or the same nested object reachable from two different parent fields in the selection set.
+
+## Likely causes
+1. **The query uses multiple fragments that each independently select an expensive field on the same underlying object** (e.g. `...OrderSummaryFragment` and `...OrderDetailsFragment` both select `order.computedTotal`), and because GraphQL executes each field resolver independently per selection, without a request-scoped memoization layer the resolver runs its full expensive logic twice for the identical input.
+2. **The client aliases the same field twice with different arguments that happen to resolve to the same underlying computation for at least one shared sub-part** (e.g. `thisMonth: revenue(range: "30d")` and `thisQuarter: revenue(range: "90d")` both internally recompute a shared "daily totals" dataset from scratch instead of sharing intermediate results).
+3. **A resolver for a nested object is reachable from two different top-level fields in the same query** (e.g. `me { organization { id name } } teamMembers { organization { id name } }` both resolve `organization` for what may be the same organization ID), and without a per-request cache keyed by object identity, each occurrence triggers its own independent fetch even when the DataLoader pattern is used for the direct parent-list case but not for this cross-branch reuse.
+4. **The resolver itself performs a non-trivial computation (not just a data fetch) inline every time it's called**, such as re-parsing, re-aggregating, or re-formatting data from a shared source, and this computation was never separated from the "fetch" step in a way that a loader/cache could intercept -- so even if the underlying data fetch is batched, the CPU-bound computation on top of it still repeats.
+5. **The DataLoader (or equivalent) is a per-field-type loader rather than tracking already-resolved values by their actual cache key**, so two different code paths that both eventually call `loader.load(id)` for the same id within the same request should be deduplicated by the loader's own memoization, but a bug or misconfiguration (e.g. constructing a new loader instance partway through a nested resolver chain) resets that memoization and defeats it.
+
+## Diagnose
+- Enable resolver-level tracing showing field path and timing for a single request (Apollo tracing extension, OpenTelemetry spans per resolver, or manual instrumentation), and look specifically for the same resolver function firing multiple times with identical arguments within one trace -- this is a distinct signature from N+1 (which shows a fixed resolver firing once per item in a list) because here the total call count is small but duplicated for identical inputs.
+- Inspect the query document itself for multiple fragments spreading the same object type, or the same field requested via different top-level paths, and manually check whether their overlapping fields are truly resolving the same object.
+- Check whether the DataLoader (or equivalent) instance used by the duplicated resolver is genuinely the same instance across both call paths within the request -- log the loader's identity or add a counter inside the batch function itself; if the batch function runs more than once for the same key in the same request, memoization isn't functioning as expected.
+- For CPU-bound duplication (not a database call, but a repeated computation), check whether the computation is wrapped in any per-request memoization at all, versus being invoked fresh inline in the resolver body every time.
+
+## Fix
+Add request-scoped memoization at the actual point of duplication, keyed by the true identity of the underlying work, not just at the list-batching layer:
+- For repeated fetches of the same object by ID across different branches of one query, ensure a single shared DataLoader instance (keyed by object ID, created once per request context) is used by every resolver path that needs that object type, so `loader.load(id)` naturally deduplicates and caches within the request regardless of how many fragments or aliases reach it.
+- For expensive computations (not just fetches), wrap them in a request-scoped cache/memoization function keyed by the computation's actual inputs (e.g. `memoize(computeRevenue, {range, orgId})` scoped to the request context), separate from any data-fetching DataLoader, so identical computations within one query execution are computed once and reused.
+- Audit fragment design for overlapping field selections across commonly-combined fragments, and where duplication is structural (the same expensive field genuinely needed by multiple UI components' fragments), make sure the resolver-level caching -- not fragment consolidation -- is what prevents the redundant work, since fragment reuse itself is a legitimate and desirable GraphQL pattern.
+- When introducing any new resolver, default to routing both fetches and non-trivial computations through the request context's shared loader/cache registry rather than ad hoc function calls, so new code doesn't reintroduce the duplication pattern as the schema grows.
+
+## Pitfalls
+Memoizing at too coarse a granularity -- e.g. caching an entire resolver's output keyed only by the parent object reference rather than by the actual arguments passed to the field -- can silently return wrong results for fields that take arguments (like the aliased `revenue(range: "30d")` vs `revenue(range: "90d")` example), since two calls with different arguments are not the same computation and must not share a cache entry; the cache key must include every argument that affects the result.
+
+## Verify
+Add request-scoped call counters to the suspected resolver/computation (visible only in test/tracing builds) and execute a query containing the duplicate-path pattern (multiple fragments or aliases reaching the same object/field), asserting the underlying expensive operation's call counter is 1 rather than N, then confirm the response values are still correct for every alias/fragment path despite the shared underlying computation.

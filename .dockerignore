@@ -1,0 +1,25 @@
+# Keep the Docker build context limited to the reviewed runtime source.
+.git
+.github
+.agents
+.brain
+.npm-sync-test
+.pytest_cache
+.venv
+venv
+__pycache__
+*.py[cod]
+*.egg-info
+.ruff_cache
+.mypy_cache
+node_modules
+npm
+bench
+docs
+plugins
+tests
+work
+debug.log
+dist
+build
+*.tgz

@@ -1,0 +1,57 @@
+name: Release artifacts
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+# This workflow creates reviewable, signed artifacts. It intentionally does
+# not publish to PyPI or npm: registry ownership and publishing policy are
+# maintainer decisions, and no package/repository identity is guessed here.
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  build-and-attest:
+    name: Build and attest release artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: uv lock --check
+      - run: uv sync --extra dev --locked
+      - run: uv run brainstem release check --path .
+      - run: uv run pytest
+      - run: uv build
+      - run: uv run brainstem sbom --path . --output dist/sbom.cdx.json
+      - name: Pack npm artifact
+        working-directory: npm
+        run: npm pack
+      - name: Stage npm artifact
+        run: mv npm/*.tgz dist/
+      - name: Generate signed provenance and SBOM attestation
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/*.tgz
+          sbom-path: dist/sbom.cdx.json
+      - name: Retain attested release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: brainstem-release-${{ github.ref_name }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 90

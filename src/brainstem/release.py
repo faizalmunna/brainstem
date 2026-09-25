@@ -113,6 +113,14 @@ def release_readiness(repo_root: Path) -> ReleaseReport:
     ci = ci_path.read_text(encoding="utf-8", errors="replace") if ci_path.exists() else ""
     codeql = codeql_path.read_text(encoding="utf-8", errors="replace") if codeql_path.exists() else ""
     release_workflow = release_workflow_path.read_text(encoding="utf-8", errors="replace") if release_workflow_path.exists() else ""
+    tag_gated_release = all(
+        marker in ci
+        for marker in (
+            "startsWith(github.ref, 'refs/tags/v')",
+            "needs: [security, python, npm-wrapper, docker-image]",
+            "uses: ./.github/workflows/release-artifacts.yml",
+        )
+    ) and "workflow_call:" in release_workflow
 
     checks = [
         ReleaseCheck(
@@ -195,6 +203,13 @@ def release_readiness(repo_root: Path) -> ReleaseReport:
             "Release artifacts receive provenance and SBOM attestations"
             if release_workflow
             else "Add a release workflow with GitHub artifact attestation permissions",
+        ),
+        ReleaseCheck(
+            "Tag-gated cross-platform release",
+            tag_gated_release,
+            "Release artifact creation waits for the full CI matrix on version tags"
+            if tag_gated_release
+            else "Make the tag release job depend on security, Windows/Linux/macOS, npm, and Docker checks",
         ),
         ReleaseCheck(
             "Clean Git worktree",

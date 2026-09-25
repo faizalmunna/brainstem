@@ -29,7 +29,8 @@ Generate the runtime SBOM from the reviewed lockfile with
 `uv run brainstem sbom --path . --output sbom.cdx.json`. It includes default
 runtime dependencies only unless an optional extra is explicitly selected.
 
-The tag/manual release-artifact workflow builds Python and npm artifacts and
+For a `v*` tag, artifact creation waits for the security, Windows/Linux/macOS,
+npm-install, and Docker CI checks. It then builds Python and npm artifacts and
 requests signed provenance plus a CycloneDX SBOM attestation. It does not
 publish; publishing remains a separate maintainer action after registry
 identity and release policy are verified. Consumers should verify the signed

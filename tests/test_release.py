@@ -21,10 +21,15 @@ def _write_release_files(root):
     (root / "LICENSE").write_text("MIT\n", encoding="utf-8")
     (root / "SECURITY.md").write_text("Report issues to security@example.test\n", encoding="utf-8")
     (root / ".github" / "workflows" / "ci.yml").write_text(
-        "ubuntu-latest\nmacos-latest\nwindows-latest\nnpm install\nbrainstem sbom\n", encoding="utf-8"
+        "ubuntu-latest\nmacos-latest\nwindows-latest\nnpm install\nbrainstem sbom\n"
+        "startsWith(github.ref, 'refs/tags/v')\n"
+        "needs: [security, python, npm-wrapper, docker-image]\n"
+        "uses: ./.github/workflows/release-artifacts.yml\n",
+        encoding="utf-8",
     )
     (root / ".github" / "workflows" / "release-artifacts.yml").write_text(
-        "id-token: write\nattestations: write\nactions/attest@v4\nsubject-path\nsbom-path\n", encoding="utf-8"
+        "workflow_call:\nid-token: write\nattestations: write\nactions/attest@v4\nsubject-path\nsbom-path\n",
+        encoding="utf-8",
     )
     (root / ".github" / "workflows" / "codeql.yml").write_text(
         "github/codeql-action/init@v4\ngithub/codeql-action/analyze@v4\nsecurity-events: write\npython\njavascript-typescript\n",
@@ -55,6 +60,7 @@ def test_release_check_accepts_complete_source_controls(tmp_path, monkeypatch):
     report = release_readiness(tmp_path)
 
     assert report.ready is True
+    assert any(check.name == "Tag-gated cross-platform release" and check.passed for check in report.checks)
 
 
 def test_release_check_rejects_mismatched_repository_identity(tmp_path, monkeypatch):

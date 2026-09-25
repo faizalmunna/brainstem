@@ -137,8 +137,10 @@ uv run brainstem release check --path .
 
 The production gate is intentionally fail-closed: it requires matching public
 repository metadata, a real security reporting channel, a clean worktree, and
-configured supply-chain controls before a release is marked ready. It never
-publishes anything automatically.
+configured supply-chain controls before a release is marked ready. A `v*` tag
+first passes the security, Windows/Linux/macOS, npm-install, and Docker checks;
+only then are release artifacts built and attested. It never publishes anything
+automatically.
 
 ## License
 

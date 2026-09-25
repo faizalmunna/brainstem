@@ -51,14 +51,17 @@ jobs:
           python-version: "3.11"
       - run: uv lock --check
       - run: uv sync --extra dev --locked
-      - run: uv run pytest
+      - name: Run tests and emit portable test evidence
+        run: uv run pytest --junitxml=test-results.xml
       - name: Generate locked-runtime SBOM
         run: uv run brainstem sbom --path . --output sbom.cdx.json
       - name: Retain release evidence
         uses: actions/upload-artifact@v4
         with:
           name: release-evidence-${{ matrix.os }}
-          path: sbom.cdx.json
+          path: |
+            sbom.cdx.json
+            test-results.xml
           retention-days: 30
       - run: uv build
 
@@ -81,7 +84,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - name: Pack the npm distribution
         working-directory: npm
-        run: npm pack
+        run: npm pack --silent
       - name: Install packed artifact in a clean project
         shell: bash
         run: |
@@ -89,7 +92,13 @@ jobs:
           cd npm-install-smoke
           npm init -y
           npm install ../npm/*.tgz
-          npx --no-install brainstem --help
+          npx --no-install brainstem --help > npm-install-evidence.txt
+      - name: Retain npm clean-install evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-install-evidence-${{ matrix.os }}
+          path: npm-install-smoke/npm-install-evidence.txt
+          retention-days: 30
 
   docker-image:
     name: Docker image (Linux)
@@ -105,3 +114,21 @@ jobs:
         run: docker build --tag brainstem:ci .
       - name: Run CLI without a writable root filesystem
         run: docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m brainstem:ci --help
+      - name: Record tested image identity
+        run: docker image inspect brainstem:ci > docker-image-evidence.json
+      - name: Retain Docker evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image-evidence-ubuntu
+          path: docker-image-evidence.json
+          retention-days: 30
+
+  release-artifacts:
+    name: Attested release artifacts
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [security, python, npm-wrapper, docker-image]
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/release-artifacts.yml

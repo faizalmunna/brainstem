@@ -120,10 +120,9 @@ class RetrievalHit:
 class RetrievalEngine:
     def __init__(self, graph: RepoGraph, vector_store=None) -> None:
         self.graph = graph
-        # Optional (plan Appendix C3/C4): deterministic retrieval below
-        # works fully with vector_store=None. When present, it only adds
-        # candidates the lexical/graph passes missed -- it never replaces
-        # them, per the plan's "deterministic-first" verdict.
+        # Deterministic retrieval works fully with vector_store=None. When
+        # available, vectors only add candidates the lexical/graph passes
+        # missed; they never replace the explainable base ranking.
         self.vector_store = vector_store
 
     def retrieve(self, query: str, limit: int = 10) -> list[RetrievalHit]:

@@ -1,10 +1,7 @@
 """Local-model ModelBackend, talking to Ollama's OpenAI-compatible endpoint.
 
-Standardizing on Ollama's REST API (rather than embedding llama.cpp) is the
-V1 choice per the token-efficiency research: routing cheap/deterministic
-subtasks to a free local model is the largest raw-cost lever available, and
-Ollama is the dominant, actively maintained local runtime (see plan,
-Appendix Cluster B2).
+It uses Ollama's REST API rather than bundling a model runtime, keeping local
+model support optional and independent from repository retrieval.
 """
 
 from __future__ import annotations

@@ -1,9 +1,4 @@
-"""Adapter interfaces that keep external dependencies outside the core.
-
-V1 ships one concrete implementation per adapter (see ollama.py and
-memory/store.py). Swapping in Graphiti, LanceDB, vLLM, E2B, etc. later means
-writing a new class against these interfaces, not touching core logic.
-"""
+"""Adapter interfaces that keep optional integrations outside the core."""
 
 from __future__ import annotations
 
@@ -45,10 +40,8 @@ class VectorStore(ABC):
 class GraphBackend(ABC):
     """Pluggable substrate for the memory graph (decisions/history/rules).
 
-    V1's default is the embedded sqlite MemoryStore (memory/store.py), which
-    satisfies this shape without implementing the full interface. A future
-    Graphiti/Neo4j-backed implementation is a drop-in for larger, multi-repo
-    or multi-user deployments.
+    The default is the embedded SQLite ``MemoryStore``. Other implementations
+    can satisfy this contract without changing callers.
     """
 
     @abstractmethod
@@ -64,8 +57,8 @@ class GraphBackend(ABC):
 class Sandbox(ABC):
     """Isolated execution for untrusted agent-generated code or proposed
     skills. Self-extension must pass sandboxing, tests, a security check, and
-    human approval before registration. Not implemented in V1;
-    E2B/Daytona are the intended adapter targets."""
+    human approval before registration. The core package does not provide a
+    sandbox implementation."""
 
     @abstractmethod
     def run(self, command: list[str], *, timeout_s: int = 60) -> tuple[int, str, str]:
@@ -75,9 +68,8 @@ class Sandbox(ABC):
 class ToolProvider(ABC):
     """A source of callable tools an agent profile can be granted, gated by
     the permission model (READ/WRITE/EXECUTE/NETWORK/INSTALL/DATABASE/
-    DEPLOY/DELETE/SECRET). MCP tool exposure (mcp_server.py) is the V1
-    ToolProvider; this interface exists so non-MCP tool sources (e.g. a
-    direct IDE integration) can be added without touching dispatch logic."""
+    DEPLOY/DELETE/SECRET). MCP is the built-in ToolProvider; this interface
+    permits other controlled tool sources without changing dispatch logic."""
 
     @abstractmethod
     def list_tools(self) -> list[dict[str, Any]]: ...

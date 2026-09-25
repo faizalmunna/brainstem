@@ -44,8 +44,7 @@ class IndexConfig(BaseModel):
 
 
 class MemoryConfig(BaseModel):
-    # V1 ships only the embedded backend; "graphiti" is a placeholder for
-    # the pluggable GraphBackend adapter described in the plan (Q12).
+    # The embedded SQLite backend is the default; adapters may add others.
     backend: str = "sqlite"
 
 

@@ -1,12 +1,10 @@
 """The deterministic symbol/dependency graph: files -> AST -> symbols -> edges.
 
-This is the "genuinely needs new engineering" piece from the plan (Q2) --
-nothing surveyed assembles Tree-sitter output into an embeddable, queryable,
-incrementally-updated graph purpose-built for "give an agent the minimal
-relevant slice." Resolution of raw import strings into actual intra-repo
-edges is deliberately best-effort and language-scoped (Python/JS/TS/Rust/
-Go/Java for V1; C/C++/Ruby get symbols but no edges yet) -- an unresolved
-or external import is simply dropped, never a hard error.
+It assembles Tree-sitter output into an embeddable, queryable, incrementally
+updated graph for focused context retrieval. Import resolution is best-effort
+and language-scoped: Python, JavaScript, TypeScript, Rust, Go, and Java get
+intra-repository edges; C, C++, and Ruby currently provide symbols only. An
+unresolved or external import is dropped rather than treated as an error.
 """
 
 from __future__ import annotations

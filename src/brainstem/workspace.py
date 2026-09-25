@@ -77,11 +77,11 @@ class Workspace:
 
     @property
     def vector_store(self):
-        """The optional semantic-retrieval backend (plan's LanceDB
-        recommendation). Returns None -- never raises -- when the `vector`
-        extra isn't installed or no embedded index has been built yet
-        (`brainstem index --embed`): deterministic retrieval must keep
-        working with zero optional dependencies installed."""
+        """Return the optional semantic-retrieval backend when available.
+
+        Returns ``None`` when the ``vector`` extra is absent or no embedded
+        index exists. Deterministic retrieval remains available in both cases.
+        """
         if not self._vector_store_loaded:
             self._vector_store_loaded = True
             vector_dir = brain_dir(self.repo_root) / VECTOR_DIRNAME

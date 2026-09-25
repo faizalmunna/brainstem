@@ -43,5 +43,5 @@ Issues = "https://github.com/faizalmunna/brainstem/issues"
 Security = "https://github.com/faizalmunna/brainstem/security/advisories/new"
 
 [build-system]
-requires = ["uv_build>=0.11.7,<0.12.0"]
+requires = ["uv_build>=0.12.17,<0.13.0"]
 build-backend = "uv_build"

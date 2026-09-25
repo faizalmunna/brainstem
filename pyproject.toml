@@ -36,6 +36,12 @@ dev = [
 [project.scripts]
 brainstem = "brainstem.cli:app"
 
+[project.urls]
+Homepage = "https://github.com/faizalmunna/brainstem"
+Repository = "https://github.com/faizalmunna/brainstem"
+Issues = "https://github.com/faizalmunna/brainstem/issues"
+Security = "https://github.com/faizalmunna/brainstem/security/advisories/new"
+
 [build-system]
 requires = ["uv_build>=0.11.7,<0.12.0"]
 build-backend = "uv_build"

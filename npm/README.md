@@ -51,9 +51,7 @@ this is written in Python first. If you're working from a source checkout,
 
 MIT.
 
-## Maintainer release checklist
+## Project links
 
-Before publishing, set the `homepage`, `repository`, and issue-tracker
-URLs in `package.json` to the real public project location. They are
-intentionally absent from the source package until that location exists,
-so registry users are never sent to a guessed repository.
+- Source and issues: https://github.com/faizalmunna/brainstem
+- Security reports: https://github.com/faizalmunna/brainstem/security/advisories/new

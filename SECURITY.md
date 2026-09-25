@@ -6,17 +6,16 @@ network endpoint by default.
 
 ## Supported versions
 
-Only the latest published release receives security fixes. Before the first
-public release, the maintainer must add the real repository security-advisory
-URL and a monitored private reporting address here; this source repository has
-no verified public remote yet, so no guessed reporting channel is listed.
+Only the latest published release receives security fixes.
 
 ## Reporting
 
 Do not publish proof-of-concept exploits, credentials, or sensitive repository
-content in public issues. Until a verified advisory channel is configured,
-report vulnerabilities directly to the repository owner through a private,
-authenticated channel.
+content in public issues. Report vulnerabilities privately through GitHub
+Private Vulnerability Reporting at
+https://github.com/faizalmunna/brainstem/security/advisories/new. Reports are
+visible only to the repository maintainers and GitHub until the reporter and
+maintainer agree to disclose them.
 
 ## Release controls
 
@@ -35,5 +34,4 @@ requests signed provenance plus a CycloneDX SBOM attestation. It does not
 publish; publishing remains a separate maintainer action after registry
 identity and release policy are verified. Consumers should verify the signed
 artifact before trusting it, for example with
-`gh attestation verify <artifact> -R <owner/repository>` after the real
-repository exists.
+`gh attestation verify <artifact> -R faizalmunna/brainstem`.

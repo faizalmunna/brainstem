@@ -41,6 +41,19 @@ _STOPWORDS = {
     "and", "or", "this", "that", "it", "its",
 }
 
+# Narrow domain-equivalence expansions for deterministic graph retrieval.
+# These are deliberately restricted to durable software concepts whose
+# implementation vocabulary has a conventional, non-identical noun form.
+# They make a question about URL "routing" find a URL "resolver" without
+# requiring an embedding model or broad fuzzy matching.
+_RETRIEVAL_QUERY_ALIASES = {
+    "route": {"routing", "router", "resolver"},
+    "routing": {"route", "router", "resolver"},
+    "resolve": {"resolver", "resolution"},
+    "resolves": {"resolver", "resolution"},
+    "resolution": {"resolve", "resolver"},
+}
+
 # A graph's symbols and paths are a fast, explainable first pass, but they do
 # not contain words used only in a function body or its comments.  The bounded
 # fallback below fills that gap without storing extra source-derived terms in
@@ -50,6 +63,7 @@ MAX_CONTENT_FALLBACK_FILES = 500
 MAX_CONTENT_FALLBACK_BYTES = 2_000_000
 MAX_CONTENT_FALLBACK_FILE_BYTES = 256_000
 MIN_CONTENT_MATCHES = 2
+RRF_K = 60
 _SENSITIVE_FILENAMES = {"id_rsa", "id_dsa", "id_ecdsa", "id_ed25519", "credentials", "secrets"}
 _SENSITIVE_SUFFIXES = {".pem", ".key", ".p12", ".pfx"}
 _TEST_PATH_PARTS = {"test", "tests", "spec", "specs", "__tests__"}
@@ -137,6 +151,10 @@ def _overlap(query_tokens: set[str], other_tokens: set[str]) -> set[str]:
     remaining = query_tokens - matched
     for token in list(remaining):
         if (token.endswith("s") and token[:-1] in other_tokens) or f"{token}s" in other_tokens:
+            matched.add(token)
+            remaining.discard(token)
+    for token in list(remaining):
+        if _RETRIEVAL_QUERY_ALIASES.get(token, set()) & other_tokens:
             matched.add(token)
             remaining.discard(token)
     if remaining:
@@ -277,10 +295,77 @@ class RetrievalEngine:
             )
         return hits
 
+    @staticmethod
+    def _unique_ranked(hits: list[RetrievalHit]) -> list[RetrievalHit]:
+        """Keep the strongest explainable hit per file in rank order."""
+        unique: list[RetrievalHit] = []
+        seen: set[str] = set()
+        for hit in sorted(hits, key=lambda item: (-item.score, item.file)):
+            if hit.file not in seen:
+                unique.append(hit)
+                seen.add(hit.file)
+        return unique
+
+    def _fuse_semantic_hits(self, query: str, lexical_hits: list[RetrievalHit], limit: int) -> list[RetrievalHit]:
+        """Fuse lexical and embedding ranks without comparing raw scores.
+
+        Different vector stores expose different similarity/distance scales;
+        adding or sorting those values beside lexical scores makes one backend
+        accidentally dominate the other. Reciprocal-rank fusion is scale-free:
+        a file is promoted for ranking well in either independent retriever,
+        and especially for agreement between them.
+        """
+        lexical = self._unique_ranked(lexical_hits)
+        candidate_limit = max(limit * 3, 10)
+        semantic_rows = self.vector_store.search(query, limit=candidate_limit)
+
+        scores: dict[str, float] = {}
+        lexical_by_file = {hit.file: hit for hit in lexical}
+        semantic_rank: dict[str, int] = {}
+        for rank, (doc_id, _score, _meta) in enumerate(semantic_rows, start=1):
+            # A stale or malicious adapter must not make a packet point outside
+            # the graph currently approved for this repository.
+            if doc_id not in self.graph.files or doc_id in semantic_rank:
+                continue
+            semantic_rank[doc_id] = rank
+            scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (RRF_K + rank)
+        for rank, hit in enumerate(lexical, start=1):
+            scores[hit.file] = scores.get(hit.file, 0.0) + 1.0 / (RRF_K + rank)
+
+        fused: list[RetrievalHit] = []
+        for file, score in scores.items():
+            lexical_hit = lexical_by_file.get(file)
+            if lexical_hit is None:
+                fused.append(RetrievalHit(file, None, None, None, score, "semantic match"))
+            elif file in semantic_rank:
+                fused.append(
+                    RetrievalHit(
+                        file,
+                        lexical_hit.symbol,
+                        lexical_hit.kind,
+                        lexical_hit.line,
+                        score,
+                        f"{lexical_hit.reason}; semantic match",
+                    )
+                )
+            else:
+                fused.append(
+                    RetrievalHit(
+                        file,
+                        lexical_hit.symbol,
+                        lexical_hit.kind,
+                        lexical_hit.line,
+                        score,
+                        lexical_hit.reason,
+                    )
+                )
+        return sorted(fused, key=lambda item: (-item.score, item.file))[:limit]
+
     def retrieve(self, query: str, limit: int = 10) -> list[RetrievalHit]:
         query_tokens = _tokenize(query, filter_stopwords=True)
         if not query_tokens:
             return []
+        asks_for_tests = bool(query_tokens & _TEST_QUERY_TERMS)
 
         hits: list[RetrievalHit] = []
 
@@ -316,8 +401,14 @@ class RetrievalEngine:
             overlap = _overlap(query_tokens, name_tokens)
             if str(sym["name"]).lower() in query.lower() or overlap:
                 query_ratio = len(overlap) / max(len(query_tokens), 1)
-                name_ratio = len(overlap) / max(len(name_tokens), 1)
-                score = 1.0 + query_ratio + name_ratio
+                # Query coverage is the primary signal.  A short generic
+                # symbol such as ``Plugin`` must not outrank a file that
+                # matches several task concepts merely because its whole
+                # one-word name happened to match one query word.
+                name_ratio = min(1.0, len(overlap) / max(len(name_tokens), 1))
+                score = 1.0 + 2.0 * query_ratio + 0.25 * name_ratio
+                if not asks_for_tests and self._is_support_path(path):
+                    score -= 0.35 if self._is_test_path(path) else 0.2
                 hits.append(
                     RetrievalHit(
                         file=path,
@@ -366,23 +457,11 @@ class RetrievalEngine:
                     hits.append(hit)
                     surfaced.add(hit.file)
 
-        # Pass 4: semantic fallback, only for files the lexical/graph/text
-        # passes above didn't already surface -- catches the "right file,
-        # wrong vocabulary" case token overlap structurally can't.
+        # Pass 4: hybrid semantic ranking. Reciprocal-rank fusion makes the
+        # optional embedding backend a genuine precision boost without
+        # assuming that its similarity numbers share a scale with lexical
+        # scores.
         if self.vector_store is not None:
-            for doc_id, score, _meta in self.vector_store.search(query, limit=limit):
-                if doc_id not in surfaced:
-                    hits.append(
-                        RetrievalHit(
-                            file=doc_id,
-                            symbol=None,
-                            kind=None,
-                            line=None,
-                            score=score,
-                            reason="semantic match",
-                        )
-                    )
-                    surfaced.add(doc_id)
+            return self._fuse_semantic_hits(query, hits, limit)
 
-        hits.sort(key=lambda h: h.score, reverse=True)
-        return hits[:limit]
+        return self._unique_ranked(hits)[:limit]

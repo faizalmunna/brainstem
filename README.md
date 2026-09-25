@@ -60,6 +60,34 @@ uv run brainstem prepare "trace the login redirect bug" --path /path/to/your-pro
 Start every coding or review task with `prepare`. Expand context only when the
 packet identifies a specific missing symbol, dependency, or test.
 
+## Measure retrieval locally
+
+`evaluate` scores Brainstem against labelled tasks that you keep locally. A
+case file contains a task description and expected repository-relative files;
+it is never uploaded. The report includes Recall@k, first relevant rank, exact
+compact packet characters, and the packet's context-character reduction versus
+the indexed source corpus. It does **not** claim provider token counts.
+
+```json
+{
+  "format_version": 1,
+  "cases": [
+    {
+      "id": "login-validation",
+      "query": "trace login token validation",
+      "required_files": ["src/auth/tokens.py", "tests/test_tokens.py"]
+    }
+  ]
+}
+```
+
+```bash
+uv run brainstem evaluate --path /path/to/your-project --cases /path/to/cases.json
+```
+
+Use a reviewed, representative suite before comparing configurations. Keep
+private task descriptions and results outside a public repository.
+
 ## Connect an MCP host
 
 Brainstem writes no editor settings by itself. It prints a configuration for

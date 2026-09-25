@@ -14,8 +14,9 @@ import json
 import re
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
+from .._atomic import atomic_write_text
 from .parser import Symbol, extract_imports, extract_symbols, language_for_path
 from .walker import iter_source_files
 
@@ -276,11 +277,16 @@ def build_graph(repo_root: Path, manifest, existing: RepoGraph | None = None) ->
 
 
 def save_graph(graph: RepoGraph, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(graph.model_dump_json(indent=2), encoding="utf-8")
+    atomic_write_text(path, graph.model_dump_json(indent=2))
 
 
 def load_graph(path: Path) -> RepoGraph | None:
     if not path.exists():
         return None
-    return RepoGraph.model_validate(json.loads(path.read_text(encoding="utf-8")))
+    try:
+        return RepoGraph.model_validate(json.loads(path.read_text(encoding="utf-8")))
+    except (json.JSONDecodeError, UnicodeDecodeError, ValidationError):
+        # An interrupted write from an older version or manual damage must not
+        # crash every command. Keep the file for inspection and rebuild it on
+        # the next explicit `brainstem index` call.
+        return None

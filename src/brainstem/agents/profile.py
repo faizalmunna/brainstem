@@ -13,6 +13,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, field_validator
 
+from .._atomic import atomic_write_text
 from .permissions import Permission
 
 if sys.version_info >= (3, 11):
@@ -97,5 +98,4 @@ def save_profile(repo_root: Path, profile: AgentProfile) -> Path:
     ]
     if profile.model_preference:
         lines.append(f"model_preference = {json.dumps(profile.model_preference)}")
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return path
+    return atomic_write_text(path, "\n".join(lines) + "\n")

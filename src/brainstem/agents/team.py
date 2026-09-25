@@ -18,6 +18,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, field_validator
 
+from .._atomic import atomic_write_text
 from .profile import agents_dir, load_profile, validate_name
 
 if sys.version_info >= (3, 11):
@@ -66,8 +67,7 @@ def save_team(repo_root: Path, team: AgentTeam, *, validate_profiles: bool = Tru
         lines.append(f"profile = {json.dumps(member.profile)}")
         lines.append(f"role = {json.dumps(member.role)}")
         lines.append("")
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
+    return atomic_write_text(path, "\n".join(lines))
 
 
 def load_team(repo_root: Path, name: str) -> AgentTeam:

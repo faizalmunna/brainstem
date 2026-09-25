@@ -15,6 +15,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from ._atomic import atomic_write_text
+
 if sys.version_info >= (3, 11):
     import tomllib
 else:  # pragma: no cover
@@ -128,8 +130,7 @@ def save_manifest(repo_root: Path, manifest: BrainManifest) -> Path:
         f"docker_image = {_toml_string(manifest.verify.docker_image)}",
         "",
     ]
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
+    return atomic_write_text(path, "\n".join(lines))
 
 
 def _toml_string(value: str) -> str:

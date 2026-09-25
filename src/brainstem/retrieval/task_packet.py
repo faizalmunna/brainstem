@@ -366,21 +366,21 @@ def _empty_bundle(hits: list[RetrievalHit]) -> dict[str, Any]:
 def _compact_auxiliary(packet: dict[str, Any], total_budget: int) -> int:
     """Drop lowest-priority metadata only after source was reduced first."""
     evidence = packet["evidence"]
-    landmarks = packet["project_landmarks"]
+    landmarks = packet.get("project_landmarks", {})
     git_state = packet["repository_state"]["git"]
     # Repository policy remains longest because it is more important than a
     # speculative test/neighbor hint. Every omission is counted in `budget`.
     collections = [
-        evidence["memory"],
-        evidence["test_candidates"],
-        evidence["impact_neighbors"],
-        landmarks["entry_points"],
-        landmarks["test_roots"],
-        landmarks["source_roots"],
-        landmarks["build_files"],
+        evidence.get("memory", []),
+        evidence.get("test_candidates", []),
+        evidence.get("impact_neighbors", []),
+        landmarks.get("entry_points", []),
+        landmarks.get("test_roots", []),
+        landmarks.get("source_roots", []),
+        landmarks.get("build_files", []),
         git_state["changed_files"],
         git_state["untracked_files"],
-        evidence["rules"],
+        evidence.get("rules", []),
     ]
     omitted = 0
     for collection in collections:
@@ -444,31 +444,41 @@ def build_task_packet(
         if memory_freshness["stale_omitted"]:
             warnings.append("Stale hash-bound memory was omitted from this task packet.")
 
-        return {
+        evidence: dict[str, Any] = {
+            "excerpts": excerpts,
+            "selected": [
+                {
+                    "file": hit.file,
+                    "symbol": hit.symbol,
+                    "kind": hit.kind,
+                    "line": hit.line,
+                    "score": round(hit.score, 4),
+                    "reason": hit.reason,
+                }
+                for hit in selected
+            ],
+        }
+        test_candidates = _test_candidates(graph, selected)
+        # Empty optional sections communicate no useful evidence but cost the
+        # same every task. Omit them in focused packets; callers can treat a
+        # missing optional section exactly like an empty list. This preserves
+        # full orientation and safety evidence whenever it actually exists.
+        if impact_neighbors:
+            evidence["impact_neighbors"] = impact_neighbors
+        if test_candidates:
+            evidence["test_candidates"] = test_candidates
+        if rules:
+            evidence["rules"] = rules
+        if memories:
+            evidence["memory"] = memories
+        if any(memory_freshness.values()):
+            evidence["memory_freshness"] = memory_freshness
+
+        packet: dict[str, Any] = {
             "packet_version": PACKET_VERSION,
             "task": task,
-            "evidence": {
-                "excerpts": excerpts,
-                "selected": [
-                    {
-                        "file": hit.file,
-                        "symbol": hit.symbol,
-                        "kind": hit.kind,
-                        "line": hit.line,
-                        "score": round(hit.score, 4),
-                        "reason": hit.reason,
-                    }
-                    for hit in selected
-                ],
-                "impact_neighbors": impact_neighbors,
-                "test_candidates": _test_candidates(graph, selected),
-                "rules": rules,
-                "memory": memories,
-                "memory_freshness": memory_freshness,
-            },
-            "project_landmarks": _project_landmarks(repo_root, graph),
+            "evidence": evidence,
             "repository_state": {"git": git_state, "freshness": freshness},
-            "risk_signals": risk_signals,
             "budget": {
                 "source_chars": bundle["total_chars"],
                 "source_budget_chars": source_budget,
@@ -480,14 +490,24 @@ def build_task_packet(
                 "overlapping_excerpts_deduplicated": bundle["deduplicated"],
             },
             "context_manifest": _context_manifest(graph, excerpts),
-            "recommended_next_actions": [
+        }
+        if risk_signals:
+            packet["risk_signals"] = risk_signals
+        # Landmarks are for orientation when direct retrieval is broad or
+        # empty. Sending them alongside precise hits repeats static repo
+        # metadata without improving an implementation packet.
+        if not excerpts:
+            packet["project_landmarks"] = _project_landmarks(repo_root, graph)
+        if warnings:
+            packet["warnings"] = warnings
+        if not excerpts or warnings:
+            packet["recommended_next_actions"] = [
                 "Review the selected source evidence before editing.",
                 "Run `brainstem index` if freshness reports stale graph metadata.",
                 "Expand context only for a named missing dependency, symbol, or test.",
                 "Start a workflow before implementing a non-trivial or risk-signalled change.",
-            ],
-            "warnings": warnings,
-        }
+            ]
+        return packet
 
     source_budget = max_chars
     packet = assemble(source_budget)
@@ -500,14 +520,14 @@ def build_task_packet(
 
     source_trimmed = source_budget != max_chars
     if source_trimmed:
-        packet["warnings"].append("Evidence was trimmed to honor the whole-packet context budget.")
+        packet.setdefault("warnings", []).append("Evidence was trimmed to honor the whole-packet context budget.")
     # Include accounting fields in the measured payload before doing the final
     # trim; otherwise a near-limit packet could exceed its advertised cap.
     packet["budget"]["auxiliary_items_omitted"] = 0
     packet["budget"]["packet_chars"] = 0
     auxiliary_omitted = _compact_auxiliary(packet, max_packet_chars)
     if auxiliary_omitted and not source_trimmed:
-        packet["warnings"].append("Evidence was trimmed to honor the whole-packet context budget.")
+        packet.setdefault("warnings", []).append("Evidence was trimmed to honor the whole-packet context budget.")
         auxiliary_omitted += _compact_auxiliary(packet, max_packet_chars)
     packet["budget"]["auxiliary_items_omitted"] = auxiliary_omitted
     for _ in range(3):

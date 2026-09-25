@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from brainstem.indexer.graph import build_graph
+from brainstem.indexer.graph import build_graph, load_graph, save_graph
 from brainstem.indexer.parser import extract_imports, extract_symbols
 from brainstem.manifest import default_manifest
 
@@ -54,6 +54,22 @@ def test_build_graph_incremental_reuses_unchanged_files(tmp_path: Path):
     second = build_graph(tmp_path, manifest, existing=first)
 
     assert first.files["a.py"] is second.files["a.py"]
+
+
+def test_load_graph_treats_a_corrupt_cache_as_missing_so_reindex_can_recover(tmp_path: Path):
+    graph_path = tmp_path / ".brain" / "index" / "graph.json"
+    graph_path.parent.mkdir(parents=True)
+    graph_path.write_text("{not valid json", encoding="utf-8")
+
+    assert load_graph(graph_path) is None
+
+    (tmp_path / "a.py").write_text("def healthy():\n    pass\n", encoding="utf-8")
+    graph = build_graph(tmp_path, default_manifest("test-repo"))
+    save_graph(graph, graph_path)
+
+    restored = load_graph(graph_path)
+    assert restored is not None
+    assert "a.py" in restored.files
 
 
 def test_build_graph_resolves_python_edges(tmp_path: Path):

@@ -58,6 +58,19 @@ def test_task_packet_compiles_bounded_explainable_evidence(tmp_path):
         memory.close()
 
 
+def test_task_packet_omits_empty_static_sections_when_direct_evidence_exists(tmp_path):
+    packet, _graph, memory = _packet(tmp_path, task="Fix login token rotation")
+    try:
+        # Orientation metadata and generic advice are useful only when direct
+        # retrieval is missing/broad. Omitting them avoids spending context on
+        # the same boilerplate on every focused task.
+        assert "project_landmarks" not in packet
+        assert "recommended_next_actions" not in packet
+        assert "memory" not in packet["evidence"]
+    finally:
+        memory.close()
+
+
 def test_task_packet_warns_when_graph_metadata_is_stale_but_uses_current_source(tmp_path):
     packet, _graph, memory = _packet(tmp_path)
     try:
@@ -155,7 +168,7 @@ def test_task_packet_omits_stale_hash_bound_memory(tmp_path):
             encoding="utf-8",
         )
         stale = build_task_packet(tmp_path, graph, memory, "token validation decision", max_chars=2_000)
-        assert stale["evidence"]["memory"] == []
+        assert "memory" not in stale["evidence"]
         assert stale["evidence"]["memory_freshness"]["stale_omitted"] == 1
         assert any("Stale hash-bound memory" in warning for warning in stale["warnings"])
     finally:

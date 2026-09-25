@@ -13,6 +13,31 @@ COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY src ./src
 RUN uv sync --locked --no-dev --no-editable
 
+FROM builder AS test
+# Keep a Linux test path adjacent to the release build. This stage is never
+# shipped in the runtime image; it proves the same locked source graph that the
+# final image installs.
+COPY tests ./tests
+RUN uv sync --locked --extra dev \
+    && uv run pytest -q --ignore=tests/test_docker_distribution.py
+
+FROM node:20-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS npm-test
+# Exercise the published npm artifact in Linux. The wrapper must create its
+# own locked Python environment and launch the real CLI without relying on a
+# sibling checkout. This test-only stage is excluded from the runtime image.
+WORKDIR /workspace
+COPY --from=uv /uv /uvx /bin/
+COPY pyproject.toml uv.lock README.md LICENSE ./
+COPY src ./src
+COPY npm ./npm
+RUN cd npm \
+    && npm pack --silent \
+    && mkdir -p /tmp/npm-install-smoke \
+    && cd /tmp/npm-install-smoke \
+    && npm init -y \
+    && npm install /workspace/npm/*.tgz \
+    && npx --no-install brainstem --help
+
 FROM python:3.11-slim@sha256:da047cb8f9d1d98e5c070f5300ba9f7274e33b8fc0e5be5ed88740aed1b95ba9
 LABEL org.opencontainers.image.title="Brainstem" \
       org.opencontainers.image.description="Local, model-neutral repository intelligence for MCP coding agents" \

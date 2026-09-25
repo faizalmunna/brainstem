@@ -97,6 +97,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Run the locked test suite inside Linux Docker
+        run: docker build --target test --tag brainstem:test .
+      - name: Install and launch the packed npm artifact inside Linux Docker
+        run: docker build --target npm-test --tag brainstem:npm-test .
       - name: Build locked, non-root runtime image
         run: docker build --tag brainstem:ci .
       - name: Run CLI without a writable root filesystem

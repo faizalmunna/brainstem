@@ -23,3 +23,18 @@ debug.log
 dist
 build
 *.tgz
+
+# Tests are available only to the Docker `test` stage. The production stages
+# copy an explicit runtime allowlist and never copy this directory.
+!tests/
+!tests/**
+
+# The npm source is available only to the Docker `npm-test` stage. The runtime
+# stages do not copy it, and generated package contents remain excluded.
+!npm/
+!npm/**
+npm/node_modules
+npm/vendor
+npm/*.tgz
+npm/.venv
+npm/.uv-cache

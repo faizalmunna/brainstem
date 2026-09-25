@@ -1,0 +1,41 @@
+[project]
+name = "brainstem"
+version = "0.1.0"
+description = "A portable, model-agnostic AI engineering brain: repo intelligence, memory, and skills exposed over MCP to any coding agent."
+readme = "README.md"
+authors = [
+    { name = "Faizal", email = "155811377+iam5zal@users.noreply.github.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "typer>=0.15.0",
+    "pydantic>=2.9.0",
+    "tree-sitter>=0.23.0",
+    "tree-sitter-language-pack>=0.4.0",
+    "pathspec>=0.12.0",
+    "fastmcp>=2.3.0",
+    "pyyaml>=6.0.0",
+    "httpx>=0.27.0",
+    "watchfiles>=0.24.0",
+]
+
+[project.optional-dependencies]
+providers = [
+    "instructor>=1.6.0",
+    "anthropic>=0.40.0",
+    "openai>=1.55.0",
+]
+vector = [
+    "lancedb>=0.16.0,<0.39.0",  # 0.39.0 dropped win_amd64 wheels; pin below that until fixed upstream
+    "fastembed>=0.4.0",
+]
+dev = [
+    "pytest>=8.3.0",
+]
+
+[project.scripts]
+brainstem = "brainstem.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.11.7,<0.12.0"]
+build-backend = "uv_build"

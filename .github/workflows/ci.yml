@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: uv lock --check
+      - run: uv sync --extra dev --locked
+      - run: uv run pytest
+      - name: Generate locked-runtime SBOM
+        run: uv run brainstem sbom --path . --output sbom.cdx.json
+      - name: Retain release evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-${{ matrix.os }}
+          path: sbom.cdx.json
+          retention-days: 30
+      - run: uv build
+
+  npm-wrapper:
+    name: npm install (${{ matrix.os }})
+    needs: python
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v5
+      - name: Pack the npm distribution
+        working-directory: npm
+        run: npm pack
+      - name: Install packed artifact in a clean project
+        shell: bash
+        run: |
+          mkdir npm-install-smoke
+          cd npm-install-smoke
+          npm init -y
+          npm install ../npm/*.tgz
+          npx --no-install brainstem --help
+
+  docker-image:
+    name: Docker image (Linux)
+    needs: python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build locked, non-root runtime image
+        run: docker build --tag brainstem:ci .
+      - name: Run CLI without a writable root filesystem
+        run: docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m brainstem:ci --help

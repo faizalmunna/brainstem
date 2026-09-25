@@ -1,0 +1,11 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "brainstem",
+  "version": "0.1.0",
+  "description": "Repo intelligence and evidence-gated engineering workflows for coding agents.",
+  "author": {
+    "name": "Faizal"
+  },
+  "license": "MIT",
+  "keywords": ["mcp", "repo-intelligence", "workflow", "security"]
+}

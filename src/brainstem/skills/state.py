@@ -14,6 +14,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .._atomic import atomic_write_text
+
 
 def state_path(repo_root: Path) -> Path:
     return repo_root / ".brain" / "skills" / "state.json"
@@ -42,7 +44,4 @@ class SkillState:
         return sorted(self._disabled)
 
     def _save(self) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(
-            json.dumps({"disabled": sorted(self._disabled)}, indent=2), encoding="utf-8"
-        )
+        atomic_write_text(self._path, json.dumps({"disabled": sorted(self._disabled)}, indent=2))

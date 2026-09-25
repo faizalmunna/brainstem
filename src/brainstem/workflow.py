@@ -18,6 +18,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from ._atomic import atomic_write_text
 from .manifest import brain_dir
 from .audit import record_audit
 
@@ -103,11 +104,7 @@ def workflow_path(repo_root: Path, workflow_id: str) -> Path:
 
 def _save(repo_root: Path, workflow: Workflow) -> Path:
     path = workflow_path(repo_root, workflow.id)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_suffix(".json.tmp")
-    temp.write_text(workflow.model_dump_json(indent=2) + "\n", encoding="utf-8")
-    temp.replace(path)
-    return path
+    return atomic_write_text(path, workflow.model_dump_json(indent=2) + "\n")
 
 
 def start_workflow(repo_root: Path, task: str, mode: str = "standard", workflow_id: str = "") -> Workflow:

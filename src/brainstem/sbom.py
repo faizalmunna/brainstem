@@ -16,6 +16,8 @@ from collections import deque
 from pathlib import Path
 from urllib.parse import quote
 
+from ._atomic import atomic_write_text
+
 
 def _load_toml(path: Path) -> dict:
     with path.open("rb") as file:
@@ -181,6 +183,4 @@ def generate_sbom(repo_root: Path, extras: tuple[str, ...] = ()) -> dict:
 def write_sbom(repo_root: Path, output: Path, extras: tuple[str, ...] = ()) -> Path:
     """Generate and write a canonical JSON SBOM; the caller chooses its path."""
     target = output if output.is_absolute() else repo_root.resolve() / output
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(generate_sbom(repo_root, extras), indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return target
+    return atomic_write_text(target, json.dumps(generate_sbom(repo_root, extras), indent=2, sort_keys=True) + "\n")

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import sqlite3
 import re
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from pathlib import PurePosixPath
@@ -86,21 +87,33 @@ def _validate_references(references: list[tuple[str, str]] | None) -> list[tuple
     through this feature.
     """
     validated: list[tuple[str, str]] = []
+    seen_paths: set[str] = set()
     for path, content_hash in references or []:
         normalized = PurePosixPath(path)
         if not path or normalized.is_absolute() or ".." in normalized.parts:
             raise ValueError(f"reference path must be a non-escaping relative path: {path!r}")
         if not _SHA256_RE.fullmatch(content_hash):
             raise ValueError("reference content_hash must be a lowercase SHA-256 hex digest")
-        validated.append((normalized.as_posix(), content_hash))
+        normalized_path = normalized.as_posix()
+        if normalized_path in seen_paths:
+            raise ValueError(f"reference path is duplicated: {normalized_path!r}")
+        seen_paths.add(normalized_path)
+        validated.append((normalized_path, content_hash))
     return validated
 
 
 class MemoryStore(GraphBackend):
     def __init__(self, db_path: Path) -> None:
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(db_path)
+        # MCP hosts can dispatch synchronous tools from more than one worker
+        # thread. Serializing this single connection keeps those calls safe,
+        # while SQLite's busy timeout lets separate Brainstem processes wait
+        # briefly for a legitimate WAL writer instead of failing immediately.
+        self._lock = threading.RLock()
+        self._conn = sqlite3.connect(db_path, timeout=5.0, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
+        self._conn.execute("PRAGMA busy_timeout=5000")
+        self._conn.execute("PRAGMA foreign_keys=ON")
         # WAL mode: readers don't block writers and vice versa, and commits
         # don't need a full fsync of the main DB file on every write --
         # Performance testing measured ~4.5ms/write under the default journal
@@ -116,7 +129,8 @@ class MemoryStore(GraphBackend):
         self._conn.commit()
 
     def close(self) -> None:
-        self._conn.close()
+        with self._lock:
+            self._conn.close()
 
     def record(
         self,
@@ -131,24 +145,25 @@ class MemoryStore(GraphBackend):
         if kind not in VALID_KINDS:
             raise ValueError(f"kind must be one of {VALID_KINDS}, got {kind!r}")
         references = _validate_references(references)
-        cur = self._conn.execute(
-            "INSERT INTO facts (kind, title, body, tags, source, scope, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (kind, title, body, ",".join(tags or []), source, scope, datetime.now(timezone.utc).isoformat()),
-        )
-        fact_id = int(cur.lastrowid)
-        if references:
-            self._conn.executemany(
-                "INSERT INTO fact_references (fact_id, path, content_hash) VALUES (?, ?, ?)",
-                [(fact_id, path, content_hash) for path, content_hash in references],
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                "INSERT INTO facts (kind, title, body, tags, source, scope, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (kind, title, body, ",".join(tags or []), source, scope, datetime.now(timezone.utc).isoformat()),
             )
-        self._conn.commit()
+            fact_id = int(cur.lastrowid)
+            if references:
+                self._conn.executemany(
+                    "INSERT INTO fact_references (fact_id, path, content_hash) VALUES (?, ?, ?)",
+                    [(fact_id, path, content_hash) for path, content_hash in references],
+                )
         return fact_id
 
     def references(self, fact_id: int) -> list[dict[str, str]]:
         """Return hash-bound source metadata for a durable fact, never source text."""
-        rows = self._conn.execute(
-            "SELECT path, content_hash FROM fact_references WHERE fact_id = ? ORDER BY path", (fact_id,)
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT path, content_hash FROM fact_references WHERE fact_id = ? ORDER BY path", (fact_id,)
+            ).fetchall()
         return [dict(row) for row in rows]
 
     def search(
@@ -176,7 +191,8 @@ class MemoryStore(GraphBackend):
         else:
             statement = "SELECT * FROM facts WHERE (title LIKE ? OR body LIKE ? OR tags LIKE ?) ORDER BY created_at DESC LIMIT ?"
             params = (like, like, like, limit)
-        rows = self._conn.execute(statement, params).fetchall()
+        with self._lock:
+            rows = self._conn.execute(statement, params).fetchall()
         return [dict(r) for r in rows]
 
     def list(self, kind: str | None = None, limit: int = 50, scope: str | None = None) -> list[dict[str, Any]]:
@@ -192,7 +208,8 @@ class MemoryStore(GraphBackend):
         else:
             statement = "SELECT * FROM facts ORDER BY created_at DESC LIMIT ?"
             params = (limit,)
-        rows = self._conn.execute(statement, params).fetchall()
+        with self._lock:
+            rows = self._conn.execute(statement, params).fetchall()
         return [dict(r) for r in rows]
 
     # -- Skill memory: which skills actually helped, for which work. --
@@ -202,18 +219,19 @@ class MemoryStore(GraphBackend):
     ) -> int:
         if outcome not in VALID_OUTCOMES:
             raise ValueError(f"outcome must be one of {VALID_OUTCOMES}, got {outcome!r}")
-        cur = self._conn.execute(
-            "INSERT INTO skill_usage (skill_name, outcome, notes, source, created_at) VALUES (?, ?, ?, ?, ?)",
-            (skill_name, outcome, notes, source, datetime.now(timezone.utc).isoformat()),
-        )
-        self._conn.commit()
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                "INSERT INTO skill_usage (skill_name, outcome, notes, source, created_at) VALUES (?, ?, ?, ?, ?)",
+                (skill_name, outcome, notes, source, datetime.now(timezone.utc).isoformat()),
+            )
         return cur.lastrowid  # type: ignore[return-value]
 
     def skill_usage_stats(self, skill_name: str) -> dict[str, Any]:
-        rows = self._conn.execute(
-            "SELECT outcome, COUNT(*) as n FROM skill_usage WHERE skill_name = ? GROUP BY outcome",
-            (skill_name,),
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT outcome, COUNT(*) as n FROM skill_usage WHERE skill_name = ? GROUP BY outcome",
+                (skill_name,),
+            ).fetchall()
         counts = {row["outcome"]: row["n"] for row in rows}
         total = sum(counts.values())
         return {

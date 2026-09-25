@@ -1,4 +1,5 @@
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -36,6 +37,22 @@ def test_fact_references_are_hash_bound_and_validate_path_safety(store):
         store.record("decision", "bad", "bad", references=[("../secret", digest)])
     with pytest.raises(ValueError, match="SHA-256"):
         store.record("decision", "bad", "bad", references=[("src/db.py", "not-a-hash")])
+    with pytest.raises(ValueError, match="duplicated"):
+        store.record("decision", "bad", "bad", references=[("src/db.py", digest), ("src/db.py", digest)])
+    assert store.search("bad") == []
+
+
+def test_memory_store_serializes_shared_connection_access_across_threads(store):
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        identifiers = list(
+            executor.map(
+                lambda number: store.record("history", f"event-{number}", "concurrent write"),
+                range(40),
+            )
+        )
+
+    assert len(set(identifiers)) == 40
+    assert len(store.search("concurrent write", limit=50)) == 40
 
 
 def test_search_scoped_by_kind(store):

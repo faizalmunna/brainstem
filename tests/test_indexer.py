@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from brainstem.indexer.graph import build_graph
-from brainstem.indexer.parser import extract_symbols
+from brainstem.indexer.parser import extract_imports, extract_symbols
 from brainstem.manifest import default_manifest
 
 
@@ -95,6 +95,28 @@ def test_build_graph_resolves_relative_python_imports(tmp_path: Path):
     graph = build_graph(tmp_path, default_manifest("test-repo"))
 
     assert graph.edges.get("pkg/sub/child.py") == ["pkg/base.py", "pkg/sub/sibling.py"]
+
+
+def test_build_graph_resolves_bare_relative_python_import_names_and_aliases(tmp_path: Path):
+    (tmp_path / "pkg" / "sub").mkdir(parents=True)
+    (tmp_path / "pkg" / "__init__.py").write_text("", encoding="utf-8")
+    (tmp_path / "pkg" / "base.py").write_text("class Base:\n    pass\n", encoding="utf-8")
+    (tmp_path / "pkg" / "sub" / "__init__.py").write_text("", encoding="utf-8")
+    (tmp_path / "pkg" / "sub" / "sibling.py").write_text("class Sibling:\n    pass\n", encoding="utf-8")
+    (tmp_path / "pkg" / "sub" / "consumer.py").write_text(
+        "from . import sibling as local_sibling\nfrom .. import base\n",
+        encoding="utf-8",
+    )
+
+    graph = build_graph(tmp_path, default_manifest("test-repo"))
+
+    assert graph.edges["pkg/sub/consumer.py"] == ["pkg/base.py", "pkg/sub/sibling.py"]
+
+
+def test_extract_imports_preserves_concrete_targets_for_bare_relative_imports():
+    source = b"from . import sibling, another as local_another\nfrom .. import base\n"
+
+    assert extract_imports(source, "python") == [".sibling", ".another", "..base"]
 
 
 def test_build_graph_ignores_external_imports(tmp_path: Path):

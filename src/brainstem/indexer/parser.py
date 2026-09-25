@@ -132,7 +132,34 @@ def _extract_import_text(node: Node, source: bytes, language: str) -> list[str]:
             module = node.child_by_field_name("module_name")
             if module is None:
                 return []
-            return [source[module.start_byte : module.end_byte].decode("utf-8", errors="replace")]
+            raw_module = source[module.start_byte : module.end_byte].decode("utf-8", errors="replace")
+            # Tree-sitter represents ``from . import sibling`` with a
+            # ``relative_import`` module containing only ``.`` and puts
+            # ``sibling`` in a separate ``name`` field.  Returning only the
+            # dot made the graph discard that dependency altogether.  Expand
+            # those names into normal relative targets (``.sibling``), which
+            # the resolver can map to ``sibling.py`` or ``sibling/__init__.py``.
+            # This remains deliberately file-oriented: names exported solely
+            # from the package initializer cannot be resolved to a separate
+            # source module and are left out rather than guessed.
+            if raw_module and set(raw_module) == {"."}:
+                targets: list[str] = []
+                for child in node.named_children:
+                    if child.type == "dotted_name":
+                        name_node = child
+                    elif child.type == "aliased_import":
+                        name_node = child.child_by_field_name("name")
+                    else:
+                        continue
+                    if name_node is not None:
+                        name = source[name_node.start_byte : name_node.end_byte].decode("utf-8", errors="replace")
+                        if name:
+                            targets.append(raw_module + name)
+                # A wildcard import has no concrete module to index.  Keep
+                # the raw import so graph.py can safely drop it rather than
+                # inventing edges to every sibling.
+                return targets or [raw_module]
+            return [raw_module]
         # import_statement: one or more dotted_name / aliased_import children
         out = []
         for child in node.named_children:

@@ -174,6 +174,50 @@ def prepare_task(
     typer.echo(json.dumps(packet, indent=2, sort_keys=True))
 
 
+@app.command("evaluate")
+def evaluate(
+    cases: Path = typer.Option(..., "--cases", help="Versioned JSON file containing labelled retrieval cases."),
+    path: Path = typer.Option(Path("."), "--path", "-p", help="Target repository root."),
+    limit: int = typer.Option(5, "--limit", "-n", help="Retrieved hits to score for each case (1-10)."),
+    max_chars: int = typer.Option(8_000, "--max-chars", help="Maximum source characters in each task packet."),
+    max_packet_chars: int = typer.Option(
+        12_000, "--max-packet-chars", help="Hard cap for each complete compact JSON task packet."
+    ),
+    semantic: bool = typer.Option(
+        False,
+        "--semantic/--no-semantic",
+        help="Include optional semantic candidates. Default is deterministic-only for reproducible local baselines.",
+    ),
+) -> None:
+    """Measure labelled retrieval quality and complete-packet context reduction locally.
+
+    The report measures exact packet characters, not provider tokens. No case,
+    source, result, or repository data is sent to a remote service.
+    """
+    from .evaluation import evaluate_retrieval, load_evaluation_cases
+
+    ws = _open_workspace(path)
+    if ws.graph is None:
+        typer.echo("No index found. Run `brainstem index` first.", err=True)
+        raise typer.Exit(code=1)
+    try:
+        suite = load_evaluation_cases(cases)
+        report = evaluate_retrieval(
+            ws.repo_root,
+            ws.graph,
+            ws.memory,
+            suite,
+            vector_store=ws.vector_store if semantic else None,
+            limit=limit,
+            max_chars=max_chars,
+            max_packet_chars=max_packet_chars,
+        )
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(json.dumps(report, indent=2, sort_keys=True))
+
+
 @app.command()
 def rules(path: Path = typer.Option(Path("."), "--path", "-p")) -> None:
     """List recorded project rules."""

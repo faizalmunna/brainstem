@@ -11,6 +11,7 @@ from brainstem.workspace import _bundled_skills_dir
 
 
 ROOT = Path(__file__).resolve().parents[1]
+HERO_GIF = ROOT / "assets" / "brainstem-agent-flow.gif"
 
 
 def _mcp_tool_count() -> int:
@@ -38,4 +39,26 @@ def test_readme_facts_match_the_shipped_catalog_and_tool_surface() -> None:
     assert host_marker.group(1).split(",") == list(HOSTS)
     for pack in registry.list_packs():
         assert f"<code>{pack}</code>" in readme
+
+    # Benchmark copy must remain specific about what was measured, rather than
+    # drifting into a universal token- or cost-saving marketing claim.
+    for expected_text in (
+        "60,114 → 2,272",
+        "96.2%",
+        "Recall@5 0.95",
+        "10 labelled questions",
+        "not a universal claim",
+    ):
+        assert expected_text in readme
+
+
+def test_readme_animation_is_a_compact_local_guidance_asset() -> None:
+    asset = HERO_GIF.read_bytes()
+
+    assert asset.startswith((b"GIF87a", b"GIF89a"))
+    assert len(asset) < 700_000
+    # Each rendered scene has its own graphic-control extension. Requiring
+    # three keeps the hero as a useful mini-guide, not a static image renamed
+    # as a GIF.
+    assert asset.count(b"\x21\xf9\x04") >= 3
 

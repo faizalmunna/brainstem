@@ -2,23 +2,22 @@
 <!-- brainstem-readme-hosts: generic,codex,claude-code,cursor,vscode,gemini -->
 
 <p align="center">
-  <img src="assets/brainstem-map.svg" alt="Brainstem turns a local repository graph into bounded evidence for coding agents" width="100%" />
+  <img src="assets/brainstem-agent-flow.gif" alt="Animated guide: Brainstem maps a local repository, focuses the task evidence, then gives a coding agent controlled tools and workflow evidence." width="100%" />
 </p>
 
 <h1 align="center">Brainstem</h1>
 
 <p align="center">
-  <strong>The local intelligence layer for agents that need to understand a real codebase.</strong><br />
-  <sub>Map the repository. Send the evidence. Keep the controls.</sub>
+  <strong>Give every coding agent the right slice of a real repository—without loading the whole thing.</strong><br />
+  <sub>Local repository intelligence · bounded evidence · explicit control</sub>
 </p>
 
 <p align="center">
-  <a href="https://github.com/faizalmunna/brainstem/actions/workflows/ci.yml"><img src="https://github.com/faizalmunna/brainstem/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="https://github.com/faizalmunna/brainstem/actions/workflows/codeql.yml"><img src="https://github.com/faizalmunna/brainstem/actions/workflows/codeql.yml/badge.svg" alt="CodeQL" /></a>
+  <a href="https://github.com/faizalmunna/brainstem/actions/workflows/ci.yml"><img src="https://github.com/faizalmunna/brainstem/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
+  <a href="https://github.com/faizalmunna/brainstem/actions/workflows/codeql.yml"><img src="https://github.com/faizalmunna/brainstem/actions/workflows/codeql.yml/badge.svg" alt="CodeQL status" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-7c3aed?style=flat-square" alt="MIT License" /></a>
   <img src="https://img.shields.io/badge/MCP-local%20stdio-0ea5e9?style=flat-square" alt="Local stdio MCP" />
   <img src="https://img.shields.io/badge/default-read--only-16a34a?style=flat-square" alt="Read only by default" />
-  <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.11 or newer" />
 </p>
 
 <p align="center">
@@ -30,45 +29,68 @@
   <img src="https://img.shields.io/badge/GitHub_Actions-release%20checks-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" alt="GitHub Actions" />
 </p>
 
-> <strong>Brainstem is not another hosted model or autonomous-agent wrapper.</strong> It is a local, model-neutral repository-intelligence and control plane that gives the coding agent you already chose the smallest current evidence set it needs to work well.
+<table>
+  <tr>
+    <td align="center" width="25%"><h2>96.2%</h2><sub>smaller bounded source-context baseline<sup>†</sup></sub></td>
+    <td align="center" width="25%"><h2>0.95</h2><sub>Recall@5 on labelled navigation tasks<sup>†</sup></sub></td>
+    <td align="center" width="25%"><h2>997</h2><sub>targeted engineering guides</sub></td>
+    <td align="center" width="25%"><h2>25</h2><sub>permission-gated MCP tools</sub></td>
+  </tr>
+</table>
 
-| <code>25</code> MCP tools | <code>6</code> configured hosts | <code>997</code> engineering guides | <code>92</code> skill packs |
-| --- | --- | --- | --- |
-| Every tool is permission-gated. | Codex, Claude Code, Cursor, VS Code, Gemini, and portable MCP. | Searchable, enableable, and measurable. | Broad domain coverage without dumping it all into context. |
+> <strong>Brainstem is the local context layer between a serious codebase and the coding agent you already use.</strong> It maps repository structure, compiles only the evidence a task needs, keeps decisions fresh, and makes high-risk work pass real workflow gates.
 
----
-
-## Built for the moment an agent meets a serious repository
+## Stop paying the context tax
 
 <table>
   <tr>
     <td width="33%" valign="top">
-      <h3>01 · Map, don't dump</h3>
-      Brainstem indexes symbols and dependency edges for Python, JavaScript, TypeScript, Rust, Go, and Java. The agent starts from a ranked, explainable slice—not a blind whole-repository paste.
+      <h3>🧩 The problem</h3>
+      Big repositories do not fit cleanly into a prompt. Whole-file dumping wastes context, hides dependencies, and makes every new agent session rediscover the same project facts.
     </td>
     <td width="33%" valign="top">
-      <h3>02 · Keep evidence fresh</h3>
-      Task packets combine source excerpts, likely tests, repository rules, Git signals, risk flags, and source-linked memory. Stale memory is detected rather than quietly reused.
+      <h3>⚡ The Brainstem move</h3>
+      Build a local symbol/dependency map, retrieve the relevant code and tests, then emit a capped, explainable task packet over local stdio MCP.
     </td>
     <td width="33%" valign="top">
-      <h3>03 · Make completion defensible</h3>
-      A durable workflow requires real design, plan, test, verification, and review evidence before high-confidence work can reach <code>complete</code>.
+      <h3>🛡️ The outcome</h3>
+      Agents receive less redundant context, teams retain engineering intent across sessions, and sensitive actions remain permission-checked and auditable.
     </td>
   </tr>
 </table>
 
-<pre><code>your coding host
-        │  local stdio MCP — no Brainstem HTTP service by default
-        ▼
-┌──────────────────────────────────────────────────────────────────┐
-│ BRAINSTEM                                                        │
-│ repository graph → focused retrieval → bounded task packet       │
-│ local memory     → workflow gates    → permission + audit policy │
-└──────────────────────────────────────────────────────────────────┘
-        │
-        ▼
-your repository + local .brain/ state
+## Measured context efficiency
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>60,114 → 2,272</h3>
+      <strong>average GPT-4o-tokenized source-context input</strong><br />
+      Full indexed repository → bounded MCP source bundle
+    </td>
+    <td width="50%" valign="top">
+      <h3>10 labelled questions · Recall@5 0.95 · MRR 0.66</h3>
+      Same-repository development baseline, measured 2026-09-25 with the visible source context supplied to the tool.
+    </td>
+  </tr>
+</table>
+
+<sup>†</sup> This is a measured Brainstem-repository navigation baseline, not a universal claim about every codebase, model bill, or agent outcome. It shows how much repeated source context was avoided in that defined run. Run <code>brainstem evaluate</code> on your own labelled tasks to measure your repository.
+
+## Three steps from repository to useful agent context
+
+<pre lang="bash"><code># 1. Create local state and map the repository.
+uv run brainstem init --path /path/to/repository
+uv run brainstem index --path /path/to/repository
+
+# 2. Give an agent a bounded, fresh task packet.
+uv run brainstem prepare "trace the login redirect bug" --path /path/to/repository
+
+# 3. Connect the agent host you already use—read-only by default.
+uv run brainstem host config codex --path /path/to/repository --profile readonly
 </code></pre>
+
+<p align="center"><sub>Small local state. No Brainstem hosted service by default. No automatic host-configuration edits. No invented token savings.</sub></p>
 
 ## The agent ecosystem—open by design
 
@@ -111,12 +133,11 @@ denied and recorded in the local audit trail.
 
 </details>
 
-## Agent roles with evidence, not autonomous-agent theater
+## Coordinate agent teams with visible responsibilities
 
-Brainstem does not claim that a library of prompts is a thousand autonomous
-agents. It provides a system for the host agent(s) you choose: named,
-reviewable profiles; declarative teams; and a workflow engine that keeps roles
-and evidence separate.
+Use the host agent or team system you prefer. Brainstem provides named,
+reviewable profiles; declarative teams; and an evidence-gated workflow so the
+next person or agent sees the required work—not a forgotten chat transcript.
 
 | Role | Next responsibility | Guardrail |
 | --- | --- | --- |
@@ -132,27 +153,32 @@ and evidence separate.
 uv run brainstem workflow start "Fix the OAuth callback" --mode high-risk --path /path/to/repository
 </code></pre>
 
-## Context efficiency you can measure—not a made-up token percentage
+## See the evidence behind every packet
 
-The useful saving is avoiding redundant repository context while retaining the
-source, tests, rules, and dependencies the task actually needs. <code>prepare</code>
-builds a capped task packet; <code>evaluate</code> measures it against labelled local
-tasks.
+<code>prepare</code> combines focused source excerpts, likely tests, repository
+rules, Git signals, risk flags, and fresh source-linked memory under a hard
+packet limit. If a repository is so small that a complete safe source set is
+shorter, <code>--context-mode auto</code> selects that smaller safe form.
+
+<details>
+<summary><strong>What the local evaluator reports</strong></summary>
+
+<br />
+
+For each labelled task, <code>evaluate</code> reports Recall@k, first relevant
+rank, packet size, indexed source size, and character-level context reduction:
 
 <pre><code>context reduction = 1 − (complete task-packet characters / indexed-source characters)
 </code></pre>
 
-The report includes Recall@k, first relevant rank, packet size, indexed source
-size, and the measured reduction. It deliberately does not turn characters
-into fictional provider-token totals. On very small repositories, the whole
-safe source set can be shorter than structured metadata; <code>--context-mode auto</code>
-chooses the smaller safe option instead of fabricating a saving.
+Character reduction is deterministic and provider-neutral. Optional tokenizer
+counts describe supplied input context; they are never presented as provider
+charges. End-to-end model cost and patch quality need controlled agent trials.
 
-<pre lang="bash"><code>uv run brainstem init --path /path/to/repository
-uv run brainstem index --path /path/to/repository
-uv run brainstem prepare "trace the login redirect bug" --path /path/to/repository
-uv run brainstem evaluate --path /path/to/repository --cases /path/to/private-cases.json
+<pre lang="bash"><code>uv run brainstem evaluate --path /path/to/repository --cases /path/to/labelled-cases.json
 </code></pre>
+
+</details>
 
 ## 997 targeted engineering guides, selectable instead of overwhelming
 

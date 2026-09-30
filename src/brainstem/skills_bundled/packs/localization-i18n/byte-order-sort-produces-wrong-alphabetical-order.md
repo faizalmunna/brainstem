@@ -1,0 +1,32 @@
+---
+name: byte-order-sort-produces-wrong-alphabetical-order
+description: A list of names or strings sorts in an incorrect alphabetical order because it uses naive byte/codepoint comparison instead of locale-aware collation.
+triggers: ["accented names sort in wrong order", "sorting is wrong for non-english names", "café sorts after zebra", "alphabetical order wrong for special characters", "sql order by wrong for accented characters"]
+permissions: ["READ"]
+---
+
+## Symptom
+A sorted list (user names, product titles, search results, a directory listing) puts entries in an order native speakers immediately recognize as wrong: accented characters sort after all unaccented letters instead of near their base letter (e.g. "Ångström" sorting after "Zeta" instead of near "Angstrom"), uppercase and lowercase versions of names interleave in a surprising way, or non-Latin scripts sort in an order with no relationship to their actual alphabetic sequence. The underlying data and display are both otherwise correct -- only the ordering is wrong -- which distinguishes this from an encoding or rendering bug.
+
+## Likely causes
+1. **Sorting compares raw byte values or Unicode code points directly** (a default `sort()`/`ORDER BY` with no locale awareness), which happens to match alphabetical order only for unaccented ASCII text -- code points for accented characters, and for characters in most non-Latin scripts, don't fall in an order that matches any language's actual alphabetic sequence.
+2. **A database column's collation is set to a binary or generic collation** (e.g. `utf8mb4_bin`, or a case-sensitive binary comparison) instead of a locale-aware collation (`utf8mb4_unicode_ci`/`utf8mb4_0900_ai_ci` in MySQL, or an explicit ICU collation in Postgres), so `ORDER BY` at the database layer produces byte-order results regardless of what the application layer does afterward.
+3. **Sorting happens in application code using the platform's default string comparison** (a plain `<` comparison or default `Array.prototype.sort()` without a locale-aware comparator) instead of a collation-aware API (`Intl.Collator` in JavaScript, ICU-backed collation elsewhere), so even if the database is configured correctly, an in-memory re-sort after fetching can silently reintroduce byte-order comparison.
+4. **The correct locale for collation isn't actually known or is assumed** -- a single global collation is applied to a multi-locale product, so content correctly collated for one language's conventions (e.g. Swedish, which sorts å/ä/ö as distinct letters after z) looks wrong to users expecting a different language's collation rules (e.g. German conventions, which sort ä near a).
+
+## Diagnose
+- Reproduce with a small test list containing a mix of accented Latin characters, mixed case, and (if relevant to the product) a non-Latin script, and compare the actual sort order produced against what a native speaker or a reference tool (ICU's demo collator, or `Intl.Collator` in a JS console) produces for the same list under the intended locale.
+- If sorting happens in a database query, check the column's and query's actual collation (`SHOW FULL COLUMNS FROM table` in MySQL, or `SELECT * FROM pg_collation` / the column's `COLLATE` clause in Postgres) rather than assuming the connection or table default is locale-aware.
+- If sorting happens in application code after fetching, check whether the comparator passed to `sort()` is a plain default comparison or an explicit locale-aware one (`new Intl.Collator(locale).compare`) -- a correctly collated database result can still be silently re-sorted incorrectly by a naive in-memory sort applied afterward.
+- Identify what locale collation conventions actually apply to the content being sorted -- this may not match the UI's display locale (e.g. sorting a list of company names that are mostly English regardless of the viewer's locale) and needs a deliberate choice, not an assumption.
+
+## Fix
+Perform sorting with an explicit, locale-aware collation at whichever layer does the actual comparison: at the database layer, set the column or query's collation to a Unicode-aware, case-insensitive/accent-aware collation appropriate to the primary content language (or accept a query-time `COLLATE` override when sorting needs to vary by the viewing user's locale); at the application layer, replace any plain string comparator used in a `sort()` call with a locale-aware comparator (`Intl.Collator(locale, options).compare`, specifying `sensitivity` for whether case/accent differences should affect ordering) so an in-memory re-sort doesn't undo a correctly collated database result. Where the product needs different sort order for different viewing users (a directory sorted per-viewer's locale expectations), collate at the application layer per-request using the viewer's locale rather than relying on one fixed database collation for everyone.
+
+## Pitfalls
+- Fixing the database collation but leaving an application-layer `Array.prototype.sort()` (which defaults to code-point comparison in JavaScript, and equivalents in other languages) applied to the already-correctly-sorted results silently undoes the fix the moment any additional client-side sort, filter, or re-render touches the list.
+- Applying one fixed collation globally assumes a single "correct" sort order across all users and content, which breaks for products serving multiple languages with genuinely different collation rules (Swedish vs. German vs. Turkish, which famously has dotted/dotless I case-folding rules that differ from every other Latin-script language) -- there often isn't one universally correct order, only a per-context correct one.
+- Using a case- and accent-insensitive collation everywhere by default can be wrong for contexts where exact distinctions matter (sorting technical identifiers, code, or anything where "café" and "cafe" must be treated as genuinely different strings) -- collation sensitivity should be a deliberate choice per use case, not a blanket default.
+
+## Verify
+Sort a test list containing accented characters, mixed case, and any non-Latin script relevant to the product, both at the database query level and after any subsequent in-memory processing, and confirm the final order presented to the user matches what a native speaker or a reference locale-aware collator (`Intl.Collator`) produces for the intended locale -- check this after any client-side re-sort or filter operation too, not only immediately after the initial query.

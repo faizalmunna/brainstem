@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">Brainstem local repository intelligence flow</title>
+  <desc id="desc">Coding agents connect locally to Brainstem, which turns a repository graph into bounded evidence with memory, workflow, and permission controls.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101a3d"/>
+      <stop offset="0.52" stop-color="#172554"/>
+      <stop offset="1" stop-color="#3b1269"/>
+    </linearGradient>
+    <linearGradient id="brain" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#38bdf8"/>
+      <stop offset="0.48" stop-color="#818cf8"/>
+      <stop offset="1" stop-color="#e879f9"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="13" flood-color="#020617" flood-opacity=".36"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="520" rx="28" fill="url(#background)"/>
+  <circle cx="1110" cy="-30" r="220" fill="#7c3aed" opacity=".19"/>
+  <circle cx="55" cy="500" r="240" fill="#0ea5e9" opacity=".15"/>
+  <g fill="none" stroke="#93c5fd" stroke-opacity=".38" stroke-width="3" stroke-linecap="round" stroke-dasharray="8 12">
+    <path d="M 300 261 H 422"/>
+    <path d="M 778 261 H 900"/>
+  </g>
+  <g fill="#dbeafe" font-family="Inter,Segoe UI,Arial,sans-serif">
+    <text x="600" y="73" text-anchor="middle" font-size="24" font-weight="700" letter-spacing="4">LOCAL, MODEL-NEUTRAL CONTEXT</text>
+    <text x="600" y="112" text-anchor="middle" font-size="17" fill="#bfdbfe">Bring the relevant map of the codebase to the agent already on your team.</text>
+  </g>
+  <g filter="url(#shadow)" font-family="Inter,Segoe UI,Arial,sans-serif">
+    <rect x="70" y="178" width="230" height="168" rx="24" fill="#172554" stroke="#60a5fa" stroke-width="2"/>
+    <circle cx="115" cy="225" r="20" fill="#38bdf8" opacity=".95"/>
+    <path d="M105 226h20M115 216v20" stroke="#082f49" stroke-width="3" stroke-linecap="round"/>
+    <text x="150" y="229" fill="#f8fafc" font-size="22" font-weight="700">Your agent</text>
+    <text x="104" y="274" fill="#bfdbfe" font-size="16">Codex · Claude Code · Cursor</text>
+    <text x="104" y="303" fill="#bfdbfe" font-size="16">VS Code · Gemini · MCP hosts</text>
+    <text x="104" y="330" fill="#7dd3fc" font-size="14" font-weight="700">LOCAL STDIO MCP</text>
+
+    <rect x="422" y="146" width="356" height="232" rx="28" fill="url(#brain)"/>
+    <rect x="424" y="148" width="352" height="228" rx="26" fill="#111827" fill-opacity=".22"/>
+    <text x="600" y="207" text-anchor="middle" fill="white" font-size="34" font-weight="800">Brainstem</text>
+    <text x="600" y="242" text-anchor="middle" fill="#e0e7ff" font-size="16">graph → retrieval → bounded task packet</text>
+    <g font-size="14" font-weight="700">
+      <rect x="463" y="274" width="107" height="39" rx="19" fill="#0f172a" fill-opacity=".58"/>
+      <text x="516" y="299" text-anchor="middle" fill="#e0f2fe">Memory</text>
+      <rect x="582" y="274" width="100" height="39" rx="19" fill="#0f172a" fill-opacity=".58"/>
+      <text x="632" y="299" text-anchor="middle" fill="#e0f2fe">Workflow</text>
+      <rect x="464" y="325" width="100" height="32" rx="16" fill="#0f172a" fill-opacity=".58"/>
+      <text x="514" y="347" text-anchor="middle" fill="#e0f2fe">Skills</text>
+      <rect x="576" y="325" width="160" height="32" rx="16" fill="#0f172a" fill-opacity=".58"/>
+      <text x="656" y="347" text-anchor="middle" fill="#e0f2fe">Permission gates</text>
+    </g>
+
+    <rect x="900" y="178" width="230" height="168" rx="24" fill="#1e1b4b" stroke="#c084fc" stroke-width="2"/>
+    <path d="M948 222l20-12 20 12v25l-20 12-20-12z" fill="#e879f9" opacity=".9"/>
+    <path d="M959 231h18M968 222v18" stroke="#4c1d95" stroke-width="3" stroke-linecap="round"/>
+    <text x="1005" y="229" fill="#f8fafc" font-size="22" font-weight="700">Your repository</text>
+    <text x="934" y="274" fill="#ddd6fe" font-size="16">Focused source evidence</text>
+    <text x="934" y="303" fill="#ddd6fe" font-size="16">Freshness + risk signals</text>
+    <text x="934" y="330" fill="#f0abfc" font-size="14" font-weight="700">STAYS ON YOUR MACHINE</text>
+  </g>
+  <g fill="#c4b5fd" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="700">
+    <text x="600" y="456" text-anchor="middle">LESS REDUNDANT CONTEXT · MORE TRACEABLE ENGINEERING</text>
+  </g>
+</svg>

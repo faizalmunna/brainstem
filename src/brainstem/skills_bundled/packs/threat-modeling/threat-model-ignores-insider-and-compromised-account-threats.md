@@ -1,0 +1,30 @@
+---
+name: threat-model-ignores-insider-and-compromised-account-threats
+description: A threat model analyzes only external attackers and never considers a malicious insider or a compromised legitimate internal account as a distinct threat actor category.
+triggers: ["we only modeled external attackers", "what if an employee's laptop is compromised", "insider threat wasn't in scope of the threat model", "a legit account got compromised and we never modeled that"]
+permissions: ["READ"]
+---
+
+## Symptom
+The threat model's actor list consists entirely of external categories — "unauthenticated internet attacker," "malicious API consumer," "botnet" — and every mitigation is framed around perimeter defenses: authentication at the edge, input validation on public endpoints, rate limiting on external APIs. When an incident later happens via a phished employee credential, an over-permissioned service account, or a disgruntled/negligent employee with legitimate access, the response is "we never modeled that," because the model has no row for "an already-authenticated internal principal acting maliciously or having been compromised."
+
+## Likely causes
+1. **STRIDE or similar framework applied only at the system's external-facing boundary** — the workshop scoped threats at the internet-to-application boundary and stopped there, never asking "what can this same authenticated user, service account, or admin do if their credentials are stolen or they act in bad faith," treating "authenticated" as equivalent to "trusted and safe" rather than as its own threat surface.
+2. **Organizational discomfort naming insiders as a threat actor** — modeling "a current employee" as an attacker category can feel accusatory or politically sensitive within a team, so it's implicitly avoided even though the same analysis is standard practice in mature security programs and isn't about assuming any specific person is malicious.
+3. **Compromise-of-legitimate-credential conflated with external attack and left unmodeled as its own path** — the model has a generic "attacker gains access" threat but never separately traces what that means once the attacker is now indistinguishable from a legitimate internal user or service — i.e., it stops at the point of initial compromise instead of continuing the analysis for what a credentialed-but-hostile actor can then do.
+4. **Least-privilege and audit logging treated as generic best practices rather than as the direct mitigations to a modeled insider/compromised-account threat** — because no such threat was ever written down, there's no analysis connecting "why does this service account have write access to production data it never writes to" to a documented threat it was supposed to mitigate.
+
+## Diagnose
+1. List every threat actor named in the current threat model. If every one is a variant of "external/unauthenticated attacker" with no entry resembling "authenticated internal user acting maliciously," "compromised employee credential," or "over-permissioned service account," the category is missing entirely.
+2. For a critical internal system (admin panel, internal data pipeline, CI/CD deployment path), ask: "what could a legitimate, currently-employed engineer with normal access do if they wanted to exfiltrate data or sabotage the system, and would it be detected?" If nobody has a ready answer with a specific detection mechanism, this threat category was never analyzed.
+3. Check whether any mitigation in the model is justified by an insider or compromised-account scenario specifically, versus all mitigations being justified by "stop external attacker at the perimeter." Absence of the former confirms the gap.
+4. Review audit logging and access review cadence for privileged internal systems — if there's no regular review of who has access and why, and no logging granular enough to reconstruct what an internal principal did, that's a direct symptom of never having modeled this actor (since the model would otherwise have flagged detection as a required mitigation).
+
+## Fix
+Add "insider" and "compromised legitimate account/credential" as explicit, separate threat actor categories in the modeling exercise, each analyzed against the system's actual trust boundaries just like external attackers are — asking specifically what a normal authenticated user, an over-privileged admin, or a hijacked service-account credential could do, and whether it would be noticed. Treat "attacker obtains valid credentials" as a pivot point that continues the analysis (what can they now reach, exfiltrate, or corrupt) rather than as an endpoint. Tie the resulting threats directly to concrete mitigations already familiar to most security programs — least-privilege access scoped to actual need, mandatory audit logging on privileged actions, separation of duties for high-impact operations (e.g., requiring two people to approve a production data export) — so these controls are traceable to a documented threat rather than floating as generic hygiene nobody prioritizes.
+
+## Pitfalls
+Framing this category as "assume your coworkers are attackers" tends to create defensiveness and get the exercise shut down politically — frame it instead around credential and account compromise (which is a factual, common, blameless scenario: phishing, malware, leaked secrets) with malicious-insider as one variant among several, not the headline. Another pitfall: adding the category in name only, listing "insider threat" as a single line item without actually tracing specific access paths and blast radius the way external threats were traced — a token entry that isn't followed through with the same rigor doesn't change the actual risk coverage.
+
+## Verify
+Confirm the threat model contains at least one insider or compromised-credential threat traced through to a specific, currently-implemented mitigation (a specific access scope restriction, an audit log that's actually queried, or a dual-approval control) — not just a category label with no analysis behind it.

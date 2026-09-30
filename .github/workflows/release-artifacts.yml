@@ -1,0 +1,57 @@
+name: Release artifacts
+
+on:
+  workflow_call:
+
+# Called only by the tag-gated CI job after its Windows/Linux/macOS matrix and
+# Docker/npm smoke tests have succeeded. It creates reviewable, signed
+# artifacts but intentionally does not publish to PyPI or npm.
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  build-and-attest:
+    name: Build and attest release artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+      - run: uv lock --check
+      - run: uv sync --extra dev --locked
+      - run: uv run brainstem release check --path .
+      - run: uv run pytest
+      - run: uv build
+      - run: uv run brainstem sbom --path . --output dist/sbom.cdx.json
+      - name: Pack npm artifact
+        working-directory: npm
+        run: npm pack
+      - name: Stage npm artifact
+        run: mv npm/*.tgz dist/
+      - name: Generate signed provenance and SBOM attestation
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/*.tgz
+          sbom-path: dist/sbom.cdx.json
+      - name: Retain attested release artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: brainstem-release-${{ github.ref_name }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 90

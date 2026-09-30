@@ -1,0 +1,160 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  security:
+    name: Dependency and static analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+      - run: uv lock --check
+      - run: uv sync --extra dev --locked
+      - name: Audit locked Python dependencies
+        run: uv run --with pip-audit pip-audit --strict
+      - name: Reject medium- and high-severity Python findings
+        run: uv run --with bandit bandit -r src/brainstem -q -ll
+      - name: Assert that the npm launcher has no runtime dependency tree
+        working-directory: npm
+        run: >-
+          node -e "const p=require('./package.json'); if (p.dependencies || p.optionalDependencies || p.peerDependencies) throw new Error('npm wrapper must stay dependency-free'); console.log('npm wrapper has no runtime dependencies');"
+
+  python:
+    name: Python (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+      - run: uv lock --check
+      - run: uv sync --extra dev --locked
+      - name: Run tests and emit portable test evidence
+        run: uv run pytest --junitxml=test-results.xml
+      - name: Generate locked-runtime SBOM
+        run: uv run brainstem sbom --path . --output sbom.cdx.json
+      - name: Retain release evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-evidence-${{ matrix.os }}
+          path: |
+            sbom.cdx.json
+            test-results.xml
+          retention-days: 30
+      - run: uv build
+
+  npm-wrapper:
+    name: npm install (${{ matrix.os }})
+    needs: [security, python]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081 # v5
+      - name: Pack the npm distribution
+        working-directory: npm
+        run: npm pack --silent
+      - name: Install packed artifact in a clean project
+        shell: bash
+        run: |
+          mkdir npm-install-smoke
+          cd npm-install-smoke
+          npm init -y
+          npm install ../npm/*.tgz
+          npx --no-install brainstem --help > npm-install-evidence.txt
+      - name: Retain npm clean-install evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: npm-install-evidence-${{ matrix.os }}
+          path: npm-install-smoke/npm-install-evidence.txt
+          retention-days: 30
+
+  docker-image:
+    name: Docker image (Linux)
+    needs: [security, python]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Enable ARM64 emulation for cross-architecture checks
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+      - name: Run the locked test suite inside Linux Docker
+        run: docker build --target test --tag brainstem:test .
+      - name: Run the portability-critical suite on Linux ARM64
+        run: >-
+          docker build --platform linux/arm64 --build-arg MCP_TEST_TIMEOUT_S=60
+          --target arm-test --tag brainstem:test-arm64 .
+      - name: Install and launch the packed npm artifact inside Linux Docker
+        run: docker build --target npm-test --tag brainstem:npm-test .
+      - name: Install and launch the packed npm artifact on Linux ARM64
+        run: docker build --platform linux/arm64 --target npm-test --tag brainstem:npm-test-arm64 .
+      - name: Build locked, non-root runtime image
+        run: docker build --tag brainstem:ci .
+      - name: Build locked, non-root ARM64 runtime image
+        run: docker build --platform linux/arm64 --tag brainstem:ci-arm64 .
+      - name: Run CLI without a writable root filesystem
+        run: docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m brainstem:ci --help
+      - name: Run ARM64 CLI without a writable root filesystem
+        run: >-
+          docker run --rm --platform linux/arm64 --read-only
+          --tmpfs /tmp:rw,noexec,nosuid,size=64m brainstem:ci-arm64 --help
+      - name: Record tested image identity
+        run: docker image inspect brainstem:ci brainstem:ci-arm64 > docker-image-evidence.json
+      - name: Retain Docker evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: docker-image-evidence-ubuntu
+          path: docker-image-evidence.json
+          retention-days: 30
+
+  release-artifacts:
+    name: Attested release artifacts
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [security, python, npm-wrapper, docker-image]
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/release-artifacts.yml

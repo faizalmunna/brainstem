@@ -11,7 +11,7 @@ from brainstem.workspace import _bundled_skills_dir
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HERO_GIF = ROOT / "assets" / "brainstem-agent-flow.gif"
+HERO_IMAGE = ROOT / "assets" / "brainstem-control-plane.png"
 
 
 def _mcp_tool_count() -> int:
@@ -37,9 +37,6 @@ def test_readme_facts_match_the_shipped_catalog_and_tool_surface() -> None:
     host_marker = re.search(r"<!-- brainstem-readme-hosts: ([^>]+) -->", readme)
     assert host_marker, "README must retain its machine-checked host marker"
     assert host_marker.group(1).split(",") == list(HOSTS)
-    for pack in registry.list_packs():
-        assert f"<code>{pack}</code>" in readme
-
     # Benchmark copy must remain specific about what was measured, rather than
     # drifting into a universal token- or cost-saving marketing claim.
     for expected_text in (
@@ -52,12 +49,11 @@ def test_readme_facts_match_the_shipped_catalog_and_tool_surface() -> None:
         assert expected_text in readme
 
 
-def test_readme_animation_is_a_compact_local_guidance_asset() -> None:
-    asset = HERO_GIF.read_bytes()
+def test_readme_hero_is_a_local_meaningful_control_plane_asset() -> None:
+    asset = HERO_IMAGE.read_bytes()
 
-    assert asset.startswith((b"GIF87a", b"GIF89a"))
-    assert len(asset) < 700_000
-    # Each rendered scene has its own graphic-control extension. Requiring
-    # three keeps the hero as a useful mini-guide, not a static image renamed
-    # as a GIF.
-    assert asset.count(b"\x21\xf9\x04") >= 3
+    assert asset.startswith(b"\x89PNG\r\n\x1a\n")
+    assert len(asset) < 3_000_000
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "assets/brainstem-control-plane.png" in readme
+    assert "brainstem-agent-flow.gif" not in readme

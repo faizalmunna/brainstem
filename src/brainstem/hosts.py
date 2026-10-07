@@ -12,7 +12,17 @@ from typing import Literal
 
 from ._atomic import atomic_write_text
 
-HOSTS = ("generic", "codex", "claude-code", "cursor", "vscode", "gemini")
+HOSTS = (
+    "generic",
+    "codex",
+    "claude-code",
+    "cursor",
+    "vscode",
+    "gemini",
+    "copilot-cli",
+    "opencode",
+    "qwen-code",
+)
 HostScope = Literal["project", "user"]
 HOST_EXECUTABLES: dict[str, str | None] = {
     "generic": None,
@@ -21,6 +31,9 @@ HOST_EXECUTABLES: dict[str, str | None] = {
     "cursor": "cursor-agent",
     "vscode": "code",
     "gemini": "gemini",
+    "copilot-cli": "copilot",
+    "opencode": "opencode",
+    "qwen-code": "qwen",
 }
 
 # These are Brainstem-adapter capabilities, not claims about a host's own
@@ -33,7 +46,7 @@ HOST_CAPABILITIES: dict[str, dict[str, bool]] = {
         "workflow_status": True,
         "approval_hooks": False,
         "graph_view": True,
-        "project_config": host != "codex",
+        "project_config": host not in {"codex", "copilot-cli"},
         "user_config": True,
     }
     for host in HOSTS
@@ -88,6 +101,30 @@ def _entry_error(entry: object, repo_root: Path, command: str) -> str | None:
     return None
 
 
+def _host_entry(host: str, definition: dict) -> dict:
+    """Render one reviewed server entry in the host's documented schema."""
+    if host == "opencode":
+        return {
+            "type": "local",
+            "command": [definition["command"], *definition["args"]],
+            "enabled": True,
+        }
+    return definition
+
+
+def _host_entry_error(host: str, entry: object, repo_root: Path, command: str) -> str | None:
+    if host != "opencode":
+        return _entry_error(entry, repo_root, command)
+    if not isinstance(entry, dict):
+        return "Brainstem entry must be an object."
+    if set(entry) != {"type", "command", "enabled"} or entry.get("type") != "local" or entry.get("enabled") is not True:
+        return "Brainstem entry does not match the reviewed local OpenCode MCP definition."
+    command_vector = entry.get("command")
+    if not isinstance(command_vector, list) or not all(isinstance(item, str) for item in command_vector) or not command_vector:
+        return "Brainstem OpenCode command must be a non-empty string list."
+    return _entry_error({"command": command_vector[0], "args": command_vector[1:]}, repo_root, command)
+
+
 def host_capabilities(host: str) -> dict[str, bool]:
     return dict(HOST_CAPABILITIES[_validate_host(host)])
 
@@ -138,13 +175,16 @@ def _config_root_key(host: str, scope: HostScope) -> str:
     # VS Code's workspace schema uses `servers`. Its documented portable
     # user/Agent-Host location is ~/.copilot/mcp-config.json and uses the
     # cross-host `mcpServers` schema.
+    if host == "opencode":
+        return "mcp"
     return "servers" if host == "vscode" and scope == "project" else "mcpServers"
 
 
 def _json_config(host: str, definition: dict, scope: HostScope = "project") -> dict:
-    if _config_root_key(host, scope) == "servers":
-        return {"servers": {"brainstem": definition}}
-    return {"mcpServers": {"brainstem": definition}}
+    root_key = _config_root_key(host, scope)
+    if host == "opencode":
+        return {"$schema": "https://opencode.ai/config.json", "mcp": {"brainstem": _host_entry(host, definition)}}
+    return {root_key: {"brainstem": _host_entry(host, definition)}}
 
 
 def render_host_config(host: str, repo_root: Path, profile: str = "readonly", command: str = "brainstem") -> str:
@@ -178,6 +218,9 @@ def render_host_config(host: str, repo_root: Path, profile: str = "readonly", co
         "vscode": "# Save as .vscode/mcp.json",
         "cursor": "# Save as .cursor/mcp.json",
         "gemini": "# Save as .gemini/settings.json",
+        "copilot-cli": "# GitHub Copilot CLI user MCP configuration (~/.copilot/mcp-config.json)",
+        "opencode": "# Save as opencode.json",
+        "qwen-code": "# Save as .qwen/settings.json",
     }
     return f"{headings[host]}\n{json.dumps(config, indent=2)}"
 
@@ -187,11 +230,11 @@ def host_config_path(host: str, repo_root: Path, scope: HostScope = "project") -
     _validate_host(host)
     if scope not in {"project", "user"}:
         raise ValueError("scope must be project or user.")
-    if host == "codex" and scope != "user":
+    if host in {"codex", "copilot-cli"} and scope != "user":
         # Codex CLI documents ~/.codex/config.toml as its active MCP config.
         # Do not create an unproven project-local .codex/config.toml and claim
         # it will be loaded; users can instead use a portable project host.
-        raise ValueError("Codex MCP configuration is user-scoped; rerun with --scope user.")
+        raise ValueError(f"{host} MCP configuration is user-scoped; rerun with --scope user.")
     root = _scope_root(repo_root, scope)
     if host == "generic":
         return (root / ".brain" / "hosts" / "generic-mcp.json") if scope == "project" else root / ".brainstem" / "generic-mcp.json"
@@ -203,7 +246,13 @@ def host_config_path(host: str, repo_root: Path, scope: HostScope = "project") -
         return root / ".cursor" / "mcp.json"
     if host == "vscode":
         return root / ".vscode" / "mcp.json" if scope == "project" else root / ".copilot" / "mcp-config.json"
-    return root / ".gemini" / "settings.json"
+    if host == "gemini":
+        return root / ".gemini" / "settings.json"
+    if host == "copilot-cli":
+        return root / ".copilot" / "mcp-config.json"
+    if host == "opencode":
+        return root / "opencode.json" if scope == "project" else root / ".config" / "opencode" / "opencode.json"
+    return root / ".qwen" / "settings.json"
 
 
 def _scope_root(repo_root: Path, scope: HostScope) -> Path:
@@ -314,7 +363,7 @@ def install_host_config(
         raise ValueError(f"Refusing to overwrite non-object '{root_key}' in {path}")
     if "brainstem" in existing and not replace:
         raise FileExistsError(f"Brainstem is already configured in {path}; rerun with --replace to update only that entry.")
-    existing["brainstem"] = definition
+    existing["brainstem"] = _host_entry(host, definition)
     return atomic_write_text(path, json.dumps(config, indent=2, sort_keys=True) + "\n")
 
 
@@ -365,7 +414,7 @@ def host_status(host: str, repo_root: Path, *, scope: HostScope = "project", com
                 entries = config.get(_config_root_key(host, scope), {})
                 entry = entries.get("brainstem") if isinstance(entries, dict) else None
             if entry is not None:
-                entry_error = _entry_error(entry, repo_root, _validate_command(command))
+                entry_error = _host_entry_error(host, entry, repo_root, _validate_command(command))
                 configured = entry_error is None
     except ValueError as exc:
         config_error = str(exc)

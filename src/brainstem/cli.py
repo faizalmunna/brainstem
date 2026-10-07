@@ -537,7 +537,7 @@ def workflow_transition(
 
 @host_app.command("config")
 def host_config(
-    host: str = typer.Argument(..., help="generic | codex | claude-code | cursor | vscode | gemini"),
+    host: str = typer.Argument(..., help="generic | codex | claude-code | cursor | vscode | gemini | copilot-cli | opencode | qwen-code"),
     profile: str = typer.Option("readonly", "--profile", help="Saved Brainstem profile to grant the host."),
     command: str = typer.Option("brainstem", "--command", help="Installed Brainstem launcher command."),
     path: Path = typer.Option(Path("."), "--path", "-p", help="Target repository root."),
@@ -576,7 +576,7 @@ def host_list() -> None:
 
 @host_app.command("status")
 def host_status_command(
-    host: str = typer.Argument(..., help="generic | codex | claude-code | cursor | vscode | gemini"),
+    host: str = typer.Argument(..., help="generic | codex | claude-code | cursor | vscode | gemini | copilot-cli | opencode | qwen-code"),
     scope: str = typer.Option("project", "--scope", help="project | user"),
     command: str = typer.Option("brainstem", "--command"),
     path: Path = typer.Option(Path("."), "--path", "-p"),
@@ -756,7 +756,7 @@ def doctor(path: Path = typer.Option(Path("."), "--path", "-p"), json_output: bo
 
 @app.command()
 def connect(
-    host: str = typer.Argument(..., help="generic | codex | claude-code | cursor | vscode | gemini"),
+    host: str = typer.Argument(..., help="generic | codex | claude-code | cursor | vscode | gemini | copilot-cli | opencode | qwen-code"),
     profile: str = typer.Option("readonly", "--profile", help="Saved Brainstem profile to grant the host."),
     command: str = typer.Option("brainstem", "--command", help="Installed Brainstem launcher command."),
     path: Path = typer.Option(Path("."), "--path", "-p", help="Target repository root."),

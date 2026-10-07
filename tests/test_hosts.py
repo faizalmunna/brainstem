@@ -44,6 +44,53 @@ def test_vscode_user_scope_uses_documented_portable_agent_host_path(tmp_path, mo
     assert "mcpServers" in config
 
 
+def test_opencode_uses_its_local_mcp_schema(tmp_path):
+    rendered = render_host_config("opencode", tmp_path)
+    config = json.loads(rendered.split("\n", 1)[1])
+
+    entry = config["mcp"]["brainstem"]
+    assert config["$schema"] == "https://opencode.ai/config.json"
+    assert entry["type"] == "local"
+    assert entry["command"][:2] == ["brainstem", "serve"]
+    assert entry["enabled"] is True
+
+
+def test_opencode_install_preserves_its_top_level_configuration_and_status(tmp_path):
+    config_path = tmp_path / "opencode.json"
+    config_path.write_text(json.dumps({"$schema": "https://opencode.ai/config.json", "plugin": ["other"]}), encoding="utf-8")
+
+    written = install_host_config("opencode", tmp_path)
+    config = json.loads(written.read_text(encoding="utf-8"))
+    assert config["plugin"] == ["other"]
+    assert config["mcp"]["brainstem"]["type"] == "local"
+    assert host_status("opencode", tmp_path)["configured"] is True
+
+    remove_host_config("opencode", tmp_path)
+    assert json.loads(written.read_text(encoding="utf-8"))["plugin"] == ["other"]
+
+
+def test_qwen_code_uses_project_settings_and_standard_stdio_schema(tmp_path):
+    written = install_host_config("qwen-code", tmp_path)
+    config = json.loads(written.read_text(encoding="utf-8"))
+
+    assert written == tmp_path / ".qwen" / "settings.json"
+    assert config["mcpServers"]["brainstem"] == server_definition(tmp_path)
+
+
+def test_copilot_cli_is_honestly_user_scoped(tmp_path):
+    with pytest.raises(ValueError, match="user-scoped"):
+        install_host_config("copilot-cli", tmp_path)
+
+
+def test_copilot_cli_writes_only_its_documented_user_configuration(tmp_path, monkeypatch):
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+
+    written = install_host_config("copilot-cli", tmp_path / "repo", scope="user")
+    config = json.loads(written.read_text(encoding="utf-8"))
+    assert written == tmp_path / ".copilot" / "mcp-config.json"
+    assert config["mcpServers"]["brainstem"]["command"] == "brainstem"
+
+
 def test_codex_config_is_explicit_and_least_privilege(tmp_path):
     rendered = render_host_config("codex", tmp_path)
 

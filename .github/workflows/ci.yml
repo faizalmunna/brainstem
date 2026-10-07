@@ -57,6 +57,8 @@ jobs:
           python-version: "3.11"
       - run: uv lock --check
       - run: uv sync --extra dev --locked
+      - name: Keep README inventory facts synchronized
+        run: uv run python tools/update_readme_facts.py --check
       - name: Run tests and emit portable test evidence
         run: uv run pytest --junitxml=test-results.xml
       - name: Generate locked-runtime SBOM

@@ -373,7 +373,7 @@ def build_server(ws: Workspace, profile: AgentProfile | None = None) -> FastMCP:
         return ws.memory.skill_usage_stats(skill_name)
 
     @mcp.tool()
-    def start_workflow(task: str, mode: str = "standard", workflow_id: str = "") -> dict:
+    def start_workflow(task: str, mode: str = "standard", workflow_id: str = "", team: str = "") -> dict:
         """Start a durable engineering workflow (fast, standard, or high-risk).
 
         This records task state only; it never spawns an agent or grants new
@@ -383,7 +383,7 @@ def build_server(ws: Workspace, profile: AgentProfile | None = None) -> FastMCP:
         require_permission("start_workflow", profile)
         from .workflow import next_work_item, start_workflow as _start_workflow
 
-        workflow = _start_workflow(ws.repo_root, task, mode=mode, workflow_id=workflow_id)
+        workflow = _start_workflow(ws.repo_root, task, mode=mode, workflow_id=workflow_id, team=team or None)
         return {"id": workflow.id, "task": workflow.task, "created": True, **next_work_item(workflow)}
 
     @mcp.tool()
@@ -442,9 +442,10 @@ def build_server(ws: Workspace, profile: AgentProfile | None = None) -> FastMCP:
     ) -> dict:
         """Record a concise design, plan, implementation, or approved-review artifact."""
         require_permission("record_workflow_artifact", profile)
-        from .workflow import record_artifact, require_workflow_capability
+        from .workflow import record_artifact, require_workflow_actor, require_workflow_capability
 
         require_workflow_capability(ws.repo_root, workflow_id, Permission.WRITE)
+        require_workflow_actor(ws.repo_root, workflow_id, profile.name)
 
         workflow = record_artifact(
             ws.repo_root, workflow_id, kind, value, status=status, by=f"mcp:{profile.name}"
@@ -455,10 +456,11 @@ def build_server(ws: Workspace, profile: AgentProfile | None = None) -> FastMCP:
     def record_workflow_evidence(workflow_id: str, evidence: dict) -> dict:
         """Record a versioned, source-bound claim with explicit uncertainty."""
         require_permission("record_workflow_evidence", profile)
-        from .workflow import record_evidence, require_workflow_capability, validate_evidence_sources
+        from .workflow import record_evidence, require_workflow_actor, require_workflow_capability, validate_evidence_sources
 
         try:
             require_workflow_capability(ws.repo_root, workflow_id, Permission.WRITE)
+            require_workflow_actor(ws.repo_root, workflow_id, profile.name)
             item = EvidenceV1.model_validate(evidence)
             validate_evidence_sources(ws.repo_root, ws.graph, item)
             workflow = record_evidence(ws.repo_root, workflow_id, item, by=f"mcp:{profile.name}")
@@ -473,9 +475,10 @@ def build_server(ws: Workspace, profile: AgentProfile | None = None) -> FastMCP:
         Use run_workflow_verification for actual, gate-satisfying execution.
         """
         require_permission("record_workflow_verification", profile)
-        from .workflow import record_verification, require_workflow_capability
+        from .workflow import record_verification, require_workflow_actor, require_workflow_capability
 
         require_workflow_capability(ws.repo_root, workflow_id, Permission.WRITE)
+        require_workflow_actor(ws.repo_root, workflow_id, profile.name)
 
         workflow = record_verification(
             ws.repo_root, workflow_id, summary, passed=passed, by=f"mcp:{profile.name}", evidence="manual"
@@ -492,9 +495,10 @@ def build_server(ws: Workspace, profile: AgentProfile | None = None) -> FastMCP:
         """
         require_permission("run_workflow_verification", profile)
         from .verify import detect_commands, run_verification as _run_verification
-        from .workflow import record_execution_verification, require_workflow_capability
+        from .workflow import record_execution_verification, require_workflow_actor, require_workflow_capability
 
         require_workflow_capability(ws.repo_root, workflow_id, Permission.EXECUTE)
+        require_workflow_actor(ws.repo_root, workflow_id, profile.name)
 
         commands = ws.manifest.verify.commands or detect_commands(ws.repo_root)
         if not commands:
@@ -520,9 +524,10 @@ def build_server(ws: Workspace, profile: AgentProfile | None = None) -> FastMCP:
     def request_workflow_transition(workflow_id: str, target: str, note: str = "") -> dict:
         """Move workflow state only when its required verification/review evidence exists."""
         require_permission("request_workflow_transition", profile)
-        from .workflow import next_work_item, require_workflow_capability, transition_workflow
+        from .workflow import next_work_item, require_workflow_actor, require_workflow_capability, transition_workflow
 
         require_workflow_capability(ws.repo_root, workflow_id, Permission.WRITE)
+        require_workflow_actor(ws.repo_root, workflow_id, profile.name)
         workflow = transition_workflow(ws.repo_root, workflow_id, target, by=f"mcp:{profile.name}", note=note)
         return {"id": workflow.id, "state": workflow.state, **next_work_item(workflow)}
 

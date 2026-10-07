@@ -111,6 +111,27 @@ jobs:
           path: npm-install-smoke/npm-install-evidence.txt
           retention-days: 30
 
+  native-components:
+    name: Native components (Linux)
+    needs: [security]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        with:
+          toolchain: 1.85.0
+      - uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+        with:
+          go-version: "1.22.x"
+      - name: Compile and test the Rust/C++/assembly source-ingest module
+        run: cargo test --manifest-path native/brainstem-native/Cargo.toml
+      - name: Compile and test the offline Go AST analyzer
+        working-directory: native/brainstem-goanalyzer
+        run: go test ./...
+
   docker-image:
     name: Docker image (Linux)
     needs: [security, python]
@@ -154,7 +175,7 @@ jobs:
   release-artifacts:
     name: Attested release artifacts
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [security, python, npm-wrapper, docker-image]
+    needs: [security, python, npm-wrapper, native-components, docker-image]
     permissions:
       contents: read
       id-token: write

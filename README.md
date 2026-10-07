@@ -91,6 +91,11 @@ uv run brainstem prepare "trace the login redirect bug" --path /path/to/reposito
 # Define a least-privilege worker and a team explicitly.
 uv run brainstem agent create explorer --permissions READ --path /path/to/repository
 uv run brainstem team create delivery --member explorer:explorer --path /path/to/repository
+
+# Or preview then create the complete seven-role, least-privilege delivery team.
+uv run brainstem team bootstrap --path /path/to/repository
+uv run brainstem team bootstrap --path /path/to/repository --apply
+uv run brainstem workflow start "Fix the OAuth callback" --team delivery --path /path/to/repository
 ```
 
 ## Bring your agent, IDE, or CLI
@@ -130,8 +135,9 @@ uv run brainstem host doctor qwen-code --scope project --path /path/to/repositor
 | **Tree-sitter** | Multi-language repository parsing | Production |
 | **SQLite** | Transactional local graph store | Production |
 | **Go** | Opt-in, network-disabled Go build/semantic enrichment | Production adapter |
-| **Rust** | Optional `brainstem-native` extension boundary | Source foundation; not promoted or released |
-| **C++ / assembly** | Only an isolated, benchmarked bottleneck if Rust cannot solve it | Not shipped; never a marketing claim |
+| **Rust** | Optional parallel source ingest and SHA-256 fingerprinting | Buildable source; Python remains the graph authority |
+| **C++** | Strict UTF-8 validation inside the Rust ingest module | Buildable source; activated only through the optional native wheel |
+| **Assembly** | Linux x86-64 NUL-byte scan with portable fallback | One isolated routine; never used to broaden capability or permissions |
 
 Assembly does not increase host compatibility. New clients come from standard MCP support, documented adapters, safe configuration handling, and contract tests. Native code is only justified after profiling shows a real bottleneck.
 
@@ -143,7 +149,7 @@ uv run python tools/generate_benchmark_corpus.py --output .tmp/brainstem-bench -
 uv run python tools/benchmark_index.py --path .tmp/brainstem-bench --runs 5 --output benchmark.json
 ```
 
-The Rust boundary in [`native/`](native/) is deliberately inactive until it demonstrates graph-output parity, verified integrity, cross-platform wheels, and repeatable speed evidence on Windows, Linux, and macOS. Python remains the safe fallback even after native wheels ship.
+[`native/`](native/) contains the Rust/C++/assembly ingest module and the offline Go AST analyzer. CI compiles both. Python re-verifies native bytes and digests before graph construction, and remains the safe fallback even after native wheels ship.
 
 ## Evidence-gated delivery
 

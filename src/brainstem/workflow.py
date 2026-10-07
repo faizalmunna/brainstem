@@ -53,6 +53,7 @@ class Workflow(BaseModel):
     id: str
     task: str
     mode: str
+    team: str | None = None
     state: str = "intake"
     created_at: str
     updated_at: str
@@ -133,6 +134,7 @@ def start_workflow(
     workflow_id: str = "",
     *,
     allowed_capabilities: list[Permission | str] | None = None,
+    team: str | None = None,
 ) -> Workflow:
     """Create a workflow without performing any external action."""
     task = task.strip()
@@ -142,6 +144,12 @@ def start_workflow(
         raise ValueError(f"Workflow task cannot exceed {MAX_TASK_CHARS} characters.")
     if mode not in MODES:
         raise ValueError(f"Unknown workflow mode '{mode}'. Choose: {', '.join(sorted(MODES))}.")
+    if team:
+        # Team membership is an opt-in execution boundary. Workflows without
+        # a selected team preserve the portable single-agent/human behavior.
+        from .agents.team import load_team
+
+        load_team(repo_root, team)
     workflow_id = _validate_id(workflow_id) if workflow_id else f"wf-{uuid.uuid4().hex[:12]}"
     path = workflow_path(repo_root, workflow_id)
     if path.exists():
@@ -151,6 +159,7 @@ def start_workflow(
         id=workflow_id,
         task=task,
         mode=mode,
+        team=team or None,
         created_at=now,
         updated_at=now,
         allowed_capabilities=_normalize_capabilities(allowed_capabilities),
@@ -203,6 +212,30 @@ def require_workflow_capability(repo_root: Path, workflow_id: str, required: Per
         granted = ", ".join(item.value for item in workflow.allowed_capabilities) or "none"
         raise PermissionError(
             f"Workflow '{workflow_id}' is not granted {required.value}; approved capabilities: {granted}."
+        )
+    return workflow
+
+
+def require_workflow_actor(repo_root: Path, workflow_id: str, profile_name: str) -> Workflow:
+    """Enforce the assigned role when a workflow explicitly selects a team.
+
+    A profile's permissions remain the capability boundary; this is a second,
+    scheduling boundary that stops a powerful implementer from silently acting
+    as the independent reviewer in a team-bound workflow.
+    """
+    workflow = load_workflow(repo_root, workflow_id)
+    if not workflow.team:
+        return workflow
+    from .agents.team import load_team
+
+    assigned_role = next_work_item(workflow)["role"]
+    team = load_team(repo_root, workflow.team)
+    allowed_profiles = {member.profile for member in team.members if member.role == assigned_role}
+    if profile_name not in allowed_profiles:
+        names = ", ".join(sorted(allowed_profiles)) or "none"
+        raise PermissionError(
+            f"Workflow '{workflow_id}' is assigned to role '{assigned_role}' in team '{workflow.team}'; "
+            f"allowed profile(s): {names}."
         )
     return workflow
 

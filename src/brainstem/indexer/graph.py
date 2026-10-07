@@ -246,12 +246,27 @@ def build_graph(repo_root: Path, manifest, existing: RepoGraph | None = None) ->
     repo_root = repo_root.resolve()
     files: dict[str, FileNode] = {}
 
-    for path in iter_source_files(repo_root, manifest):
+    source_paths = list(iter_source_files(repo_root, manifest))
+    # Optional native ingest is a narrow accelerator: it cannot broaden the
+    # walker scope or replace Python's graph/parser authority. Any unavailable
+    # or malformed native result falls back per-file to the portable path.
+    try:
+        from ..native import read_utf8_sources
+
+        native_sources = read_utf8_sources(source_paths) or {}
+    except Exception:  # Defensive boundary: indexing must not depend on an optional wheel.
+        native_sources = {}
+
+    for path in source_paths:
         rel = path.relative_to(repo_root).as_posix()
-        try:
-            data = path.read_bytes()
-        except OSError:
-            continue
+        native_result = native_sources.get(str(path.resolve()))
+        if native_result is None:
+            try:
+                data = path.read_bytes()
+            except OSError:
+                continue
+        else:
+            data, _native_hash = native_result
         # The graph becomes evidence for agent decisions. Do not create facts
         # from binary/NUL-containing or malformed source that could later be
         # rendered differently by a host. UTF-8 is the portable contract for
@@ -262,6 +277,8 @@ def build_graph(repo_root: Path, manifest, existing: RepoGraph | None = None) ->
             data.decode("utf-8")
         except UnicodeDecodeError:
             continue
+        # Hash in the Python authority even after native ingest. This verifies
+        # the graph-evidence digest until a signed native wheel earns trust.
         content_hash = _hash_bytes(data)
 
         if existing and rel in existing.files and existing.files[rel].content_hash == content_hash:

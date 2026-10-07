@@ -1,7 +1,17 @@
 import pytest
 
 from brainstem.agents.profile import AgentProfile, Permission, save_profile
-from brainstem.agents.team import AgentTeam, TeamMember, list_teams, load_team, remove_team, save_team
+from brainstem.agents.team import (
+    DELIVERY_BLUEPRINT,
+    AgentTeam,
+    TeamMember,
+    bootstrap_delivery_team,
+    delivery_team_preview,
+    list_teams,
+    load_team,
+    remove_team,
+    save_team,
+)
 
 
 def _make_profile(repo_root, name, permissions=None):
@@ -86,3 +96,20 @@ def test_team_with_no_members_is_valid(tmp_path):
     save_team(tmp_path, AgentTeam(name="empty-team"))
     loaded = load_team(tmp_path, "empty-team")
     assert loaded.members == []
+
+
+def test_delivery_team_preview_has_all_independent_roles_without_writing(tmp_path):
+    preview = delivery_team_preview()
+
+    assert [member.role for member in preview.members] == [name for name, _, _ in DELIVERY_BLUEPRINT]
+    assert list_teams(tmp_path) == []
+
+
+def test_bootstrap_delivery_team_creates_least_privilege_profiles_and_refuses_overwrite(tmp_path):
+    team_path = bootstrap_delivery_team(tmp_path)
+
+    team = load_team(tmp_path, "delivery")
+    assert team_path.exists()
+    assert {member.profile for member in team.members} == {name for name, _, _ in DELIVERY_BLUEPRINT}
+    with pytest.raises(FileExistsError, match="Refusing to overwrite"):
+        bootstrap_delivery_team(tmp_path)

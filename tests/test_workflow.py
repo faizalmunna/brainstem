@@ -13,8 +13,10 @@ from brainstem.workflow import (
     transition_workflow,
     validate_evidence_sources,
     require_workflow_capability,
+    require_workflow_actor,
 )
 from brainstem.agents.permissions import Permission
+from brainstem.agents.team import bootstrap_delivery_team
 from brainstem.verify import CommandResult, VerificationResult
 from brainstem.contracts import CodeFactV1, EvidenceV1, GoalSpecV1, SourceLocationV1
 from brainstem.indexer.graph import build_graph
@@ -149,6 +151,15 @@ def test_goal_workflow_enforces_its_approved_capability_scope(tmp_path):
     assert require_workflow_capability(tmp_path, workflow.id, Permission.READ).id == workflow.id
     with pytest.raises(PermissionError, match="not granted WRITE"):
         require_workflow_capability(tmp_path, workflow.id, Permission.WRITE)
+
+
+def test_team_bound_workflow_requires_the_role_assigned_to_its_current_state(tmp_path):
+    bootstrap_delivery_team(tmp_path)
+    workflow = start_workflow(tmp_path, "Fix authentication", workflow_id="team-bound", team="delivery")
+
+    assert require_workflow_actor(tmp_path, workflow.id, "explorer").id == workflow.id
+    with pytest.raises(PermissionError, match="assigned to role 'explorer'"):
+        require_workflow_actor(tmp_path, workflow.id, "implementer")
 
 
 def test_goal_contract_rejects_invalid_or_duplicate_capabilities():

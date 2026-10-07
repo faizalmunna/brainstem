@@ -401,6 +401,7 @@ def workflow_start(
     task: str = typer.Argument(..., help="Outcome to deliver."),
     mode: str = typer.Option("standard", "--mode", help="fast | standard | high-risk"),
     workflow_id: str = typer.Option("", "--id", help="Optional stable workflow id."),
+    team: str = typer.Option("", "--team", help="Optional saved team that enforces the current role at the MCP boundary."),
     path: Path = typer.Option(Path("."), "--path", "-p"),
 ) -> None:
     """Start a workflow; this records work but never starts an agent itself."""
@@ -408,8 +409,8 @@ def workflow_start(
 
     ws = _open_workspace(path)
     try:
-        workflow = start_workflow(ws.repo_root, task, mode=mode, workflow_id=workflow_id)
-    except (ValueError, FileExistsError) as exc:
+        workflow = start_workflow(ws.repo_root, task, mode=mode, workflow_id=workflow_id, team=team or None)
+    except (ValueError, FileExistsError, FileNotFoundError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from None
     typer.echo(_workflow_summary(workflow))
@@ -1198,6 +1199,31 @@ def team_create(
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1)
     typer.echo(f"Created team '{name}' at {written}")
+
+
+@team_app.command("bootstrap")
+def team_bootstrap(
+    apply: bool = typer.Option(False, "--apply", help="Persist the standard delivery team and its seven profiles."),
+    replace: bool = typer.Option(False, "--replace", help="Replace only the standard delivery-team profiles and team."),
+    path: Path = typer.Option(Path("."), "--path", "-p"),
+) -> None:
+    """Preview or explicitly create a complete least-privilege delivery team."""
+    from .agents.team import bootstrap_delivery_team, delivery_team_preview
+
+    ws = _open_workspace(path)
+    preview = delivery_team_preview()
+    if not apply:
+        typer.echo(f"Preview only: {preview.name} ({preview.description})")
+        for member in preview.members:
+            typer.echo(f"  - {member.role}: {member.profile}")
+        typer.echo("No files written. Rerun with --apply to create these seven profiles and the team.")
+        return
+    try:
+        written = bootstrap_delivery_team(ws.repo_root, replace=replace)
+    except FileExistsError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(f"Created standard delivery team at {written}")
 
 
 @team_app.command("list")

@@ -9,12 +9,56 @@ the public Python/MCP contract.
 from __future__ import annotations
 
 import importlib
+import hashlib
+from pathlib import Path
 from typing import Literal
 
 from .indexer.graph import RepoGraph, build_graph
 
 EngineName = Literal["auto", "native", "python"]
 NATIVE_ABI_VERSION = 1
+
+
+def read_utf8_sources(paths: list[Path]) -> dict[str, tuple[bytes, str]] | None:
+    """Use the optional native batch reader without trusting it blindly.
+
+    Paths arrive only from the Python walker, which already enforces manifest,
+    gitignore, symlink, size, and repository-boundary rules. Native code may
+    parallelize the read/UTF-8 scan, but malformed output makes us fall back
+    to the portable reader rather than weakening the evidence contract.
+    """
+    if not paths:
+        return {}
+    try:
+        module = importlib.import_module("brainstem_native")
+        status_fn = getattr(module, "backend_status", None)
+        reader = getattr(module, "read_utf8_sources", None)
+        status = status_fn() if callable(status_fn) else {}
+        if not isinstance(status, dict) or status.get("source_batch_reader") is not True or not callable(reader):
+            return None
+        expected = {str(path.resolve()) for path in paths}
+        payload = reader(sorted(expected))
+    except Exception:
+        return None
+    if not isinstance(payload, list):
+        return None
+    sources: dict[str, tuple[bytes, str]] = {}
+    for item in payload:
+        if not isinstance(item, (list, tuple)) or len(item) != 3:
+            return None
+        raw_path, data, content_hash = item
+        if not isinstance(raw_path, str) or not isinstance(data, bytes) or not isinstance(content_hash, str):
+            return None
+        normalized = str(Path(raw_path).resolve())
+        if normalized not in expected or normalized in sources:
+            return None
+        # An unsigned/local wheel must not be trusted for graph evidence. The
+        # rehash is intentionally retained until a signed release supplies a
+        # verified integrity contract.
+        if hashlib.sha256(data).hexdigest() != content_hash:
+            return None
+        sources[normalized] = (data, content_hash)
+    return sources
 
 
 def native_status() -> dict[str, object]:

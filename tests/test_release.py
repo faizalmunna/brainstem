@@ -24,7 +24,7 @@ def _write_release_files(root):
     (root / ".github" / "workflows" / "ci.yml").write_text(
         "ubuntu-latest\nmacos-latest\nwindows-latest\nnpm install\nbrainstem sbom\n"
         "startsWith(github.ref, 'refs/tags/v')\n"
-        "needs: [security, python, npm-wrapper, docker-image]\n"
+        "needs: [security, python, npm-wrapper, native-components, docker-image]\n"
         "uses: ./.github/workflows/release-artifacts.yml\n"
         "docker/setup-qemu-action@1111111111111111111111111111111111111111\n--platform linux/arm64\nMCP_TEST_TIMEOUT_S=60\n",
         encoding="utf-8",

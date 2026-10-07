@@ -53,6 +53,8 @@ graph_app = typer.Typer(help="Inspect and export the bounded local repository gr
 app.add_typer(graph_app, name="graph")
 compatibility_app = typer.Typer(help="Inspect and safely enable compatible external workflow packs.")
 app.add_typer(compatibility_app, name="compatibility")
+mcp_app = typer.Typer(help="Catalog reviewed third-party MCP connections without storing credentials.")
+app.add_typer(mcp_app, name="mcp")
 release_app = typer.Typer(help="Audit source-controlled prerequisites for a Brainstem production release.")
 app.add_typer(release_app, name="release")
 
@@ -1115,44 +1117,141 @@ def ask(
     prompt: str = typer.Argument(..., help="Prompt to route through the token-efficiency broker."),
     path: Path = typer.Option(Path("."), "--path", "-p"),
     local: bool = typer.Option(False, "--local", help="Prefer the local Ollama backend if it's reachable."),
-    ollama_model: str = typer.Option("llama3.2", "--ollama-model", help="Model name as shown by `ollama list`."),
+    provider: str = typer.Option("auto", "--provider", help="auto or one of: anthropic, openai, ollama."),
+    model: str | None = typer.Option(None, "--model", help="Override the selected provider's configured model for this call."),
+    ollama_model: str | None = typer.Option(
+        None, "--ollama-model", help="Deprecated alias for overriding only the configured local Ollama fallback model."
+    ),
+    max_input_tokens: int | None = typer.Option(
+        None, "--max-input-tokens", min=1, max=1_000_000, help="Reject a larger estimated input before calling a provider."
+    ),
+    max_output_tokens: int | None = typer.Option(
+        None, "--max-output-tokens", min=1, max=100_000, help="Provider-enforced maximum generated tokens."
+    ),
     no_cache: bool = typer.Option(False, "--no-cache"),
 ) -> None:
     """Run a completion through cache -> route -> call. Exercises the
     broker directly; not part of the MCP tool surface (see broker.py)."""
-    from .adapters.ollama import OllamaBackend
+    from .adapters.registry import build_backends
+    from .broker.budget import CompletionBudget, TokenBudgetExceeded
     from .broker.broker import RequestBroker
     from .broker.cache import RequestCache
     from .broker.router import NoBackendAvailable, Router
+    from .broker.usage import UsageLedger
 
     ws = _open_workspace(path)
-    backends = [OllamaBackend(model=ollama_model)]
     try:
-        from .adapters.anthropic_backend import AnthropicBackend
-
-        backends.append(AnthropicBackend())
-    except ImportError:
-        pass
-    try:
-        from .adapters.openai_backend import OpenAIBackend
-
-        backends.append(OpenAIBackend())
-    except ImportError:
-        pass
+        model_config = (
+            ws.manifest.model.model_copy(update={"local_model": ollama_model}) if ollama_model else ws.manifest.model
+        )
+        backends = build_backends(model_config, provider=provider, model=model, prefer_local=local)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from None
 
     cache = RequestCache(brain_state_path(ws.repo_root, "cache", "requests.db"))
     router = Router(backends)
-    broker = RequestBroker(cache, router)
+    usage_ledger = UsageLedger(brain_state_path(ws.repo_root, "cache", "usage.db"))
+    broker = RequestBroker(cache, router, usage_ledger=usage_ledger)
+    budget = CompletionBudget(
+        max_input_tokens=max_input_tokens or ws.manifest.model.max_input_tokens,
+        max_output_tokens=max_output_tokens or ws.manifest.model.max_output_tokens,
+    )
 
     try:
-        result = broker.complete(prompt, prefer_local=local, use_cache=not no_cache)
+        result = broker.complete(prompt, prefer_local=local, use_cache=not no_cache, budget=budget)
     except NoBackendAvailable as exc:
         typer.echo(str(exc), err=True)
         typer.echo("Set ANTHROPIC_API_KEY / OPENAI_API_KEY, or run Ollama locally, then retry.", err=True)
         raise typer.Exit(code=1)
+    except TokenBudgetExceeded as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from None
 
     typer.echo(result.text)
-    typer.echo(f"\n[{result.backend}, cache_hit={result.cache_hit}, ~{result.estimated_tokens} tokens]", err=True)
+    typer.echo(
+        f"\n[{result.backend}, cache_hit={result.cache_hit}, "
+        f"~{result.input_tokens_estimated} input + ~{result.output_tokens_estimated} output tokens; "
+        f"output cap={result.max_output_tokens}]",
+        err=True,
+    )
+
+
+@app.command("usage")
+def usage(path: Path = typer.Option(Path("."), "--path", "-p")) -> None:
+    """Show aggregate local broker usage without reading prompts or responses."""
+    from .broker.usage import UsageLedger
+
+    ws = _open_workspace(path)
+    ledger = UsageLedger(brain_state_path(ws.repo_root, "cache", "usage.db"))
+    typer.echo(json.dumps(ledger.summary(), indent=2, sort_keys=True))
+
+
+@mcp_app.command("inspect")
+def mcp_inspect(descriptor: Path = typer.Argument(..., help="JSON descriptor for one third-party MCP connection.")) -> None:
+    """Validate a connection descriptor without executing or registering it."""
+    from .integrations import inspect_connection
+
+    try:
+        connection = inspect_connection(descriptor)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(json.dumps(connection.model_dump(mode="json"), indent=2, sort_keys=True))
+
+
+@mcp_app.command("register")
+def mcp_register(
+    descriptor: Path = typer.Argument(..., help="Validated JSON descriptor for one third-party MCP connection."),
+    path: Path = typer.Option(Path("."), "--path", "-p", help="Target repository root."),
+    apply: bool = typer.Option(False, "--apply", help="Write the reviewed credential-free declaration to .brain/."),
+    replace: bool = typer.Option(False, "--replace", help="Replace an existing declaration with this name."),
+) -> None:
+    """Preview, then explicitly register a third-party MCP connection declaration."""
+    from .integrations import inspect_connection, register_connection
+
+    ws = _open_workspace(path)
+    try:
+        connection = inspect_connection(descriptor)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from None
+    if not apply:
+        typer.echo(json.dumps(connection.model_dump(mode="json"), indent=2, sort_keys=True))
+        typer.echo("Preview only. Re-run with --apply to save this credential-free declaration.", err=True)
+        return
+    try:
+        written = register_connection(ws.repo_root, connection, replace=replace)
+    except (ValueError, FileExistsError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(f"Registered MCP connection '{connection.name}' in {written}")
+
+
+@mcp_app.command("list")
+def mcp_list(path: Path = typer.Option(Path("."), "--path", "-p")) -> None:
+    """List credential-free third-party MCP connection declarations for a repo."""
+    from .integrations import list_connections
+
+    ws = _open_workspace(path)
+    typer.echo(json.dumps([item.model_dump(mode="json") for item in list_connections(ws.repo_root)], indent=2, sort_keys=True))
+
+
+@mcp_app.command("render")
+def mcp_render(
+    name: str = typer.Argument(..., help="Registered connection name."),
+    path: Path = typer.Option(Path("."), "--path", "-p"),
+) -> None:
+    """Render a portable MCP client entry; copy it into the selected host config."""
+    from .integrations import render_connection
+
+    ws = _open_workspace(path)
+    try:
+        rendered = render_connection(ws.repo_root, name)
+    except FileNotFoundError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(json.dumps(rendered, indent=2, sort_keys=True))
 
 
 @agent_app.command("list")

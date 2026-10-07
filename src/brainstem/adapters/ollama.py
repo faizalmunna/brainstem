@@ -41,9 +41,15 @@ class OllamaBackend(ModelBackend):
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
 
+        max_output_tokens = kwargs.pop("max_output_tokens", None)
+        payload: dict[str, Any] = {"model": self.model, "messages": messages, "stream": False}
+        if max_output_tokens is not None:
+            # Ollama's equivalent is a generation option, not a top-level
+            # chat field.  Keep the provider detail in this adapter.
+            payload["options"] = {"num_predict": max_output_tokens}
         resp = httpx.post(
             f"{self.base_url}/api/chat",
-            json={"model": self.model, "messages": messages, "stream": False},
+            json=payload,
             timeout=kwargs.pop("timeout", 60.0),
         )
         resp.raise_for_status()

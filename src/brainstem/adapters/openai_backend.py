@@ -35,5 +35,10 @@ class OpenAIBackend(ModelBackend):
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
+        # The broker uses one provider-neutral name.  Chat Completions uses
+        # ``max_tokens``; do not let a provider-specific spelling leak upward.
+        max_output_tokens = kwargs.pop("max_output_tokens", None)
+        if max_output_tokens is not None:
+            kwargs.setdefault("max_tokens", max_output_tokens)
         response = client.chat.completions.create(model=self.model, messages=messages, **kwargs)
         return response.choices[0].message.content or ""

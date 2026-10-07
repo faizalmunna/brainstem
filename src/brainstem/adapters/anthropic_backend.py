@@ -33,9 +33,10 @@ class AnthropicBackend(ModelBackend):
 
     def complete(self, prompt: str, *, system: str | None = None, **kwargs: Any) -> str:
         client = self._get_client()
+        max_output_tokens = kwargs.pop("max_output_tokens", None)
         response = client.messages.create(
             model=self.model,
-            max_tokens=kwargs.pop("max_tokens", 1024),
+            max_tokens=max_output_tokens or kwargs.pop("max_tokens", 1024),
             system=system or "",
             messages=[{"role": "user", "content": prompt}],
         )

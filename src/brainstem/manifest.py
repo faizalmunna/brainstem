@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from ._atomic import atomic_write_text
 
@@ -55,7 +55,29 @@ class MemoryConfig(BaseModel):
 class ModelConfig(BaseModel):
     default_provider: str = "anthropic"
     local_fallback: str = "ollama"
+    fallback_providers: list[str] = Field(default_factory=lambda: ["openai", "ollama"])
+    anthropic_model: str = "claude-sonnet-4-5"
+    openai_model: str = "gpt-4.1-mini"
+    local_model: str = "llama3.2"
+    # Enforced before a remote request and translated to each provider's
+    # native output-limit parameter by its adapter.
+    max_input_tokens: int = Field(default=16_000, ge=1, le=1_000_000)
+    max_output_tokens: int = Field(default=1_024, ge=1, le=100_000)
     embedding_model: str = "nomic-embed-text-v1.5"
+
+    @field_validator("default_provider", "local_fallback")
+    @classmethod
+    def known_provider(cls, value: str) -> str:
+        if value not in {"anthropic", "openai", "ollama"}:
+            raise ValueError("model providers must be one of: anthropic, openai, ollama.")
+        return value
+
+    @field_validator("fallback_providers")
+    @classmethod
+    def known_fallback_providers(cls, value: list[str]) -> list[str]:
+        if any(provider not in {"anthropic", "openai", "ollama"} for provider in value):
+            raise ValueError("model fallback_providers must use: anthropic, openai, ollama.")
+        return list(dict.fromkeys(value))
 
 
 class ProjectConfig(BaseModel):
@@ -170,6 +192,12 @@ def save_manifest(repo_root: Path, manifest: BrainManifest) -> Path:
         "[model]",
         f"default_provider = {_toml_string(manifest.model.default_provider)}",
         f"local_fallback = {_toml_string(manifest.model.local_fallback)}",
+        f"fallback_providers = {_toml_string_list(manifest.model.fallback_providers)}",
+        f"anthropic_model = {_toml_string(manifest.model.anthropic_model)}",
+        f"openai_model = {_toml_string(manifest.model.openai_model)}",
+        f"local_model = {_toml_string(manifest.model.local_model)}",
+        f"max_input_tokens = {manifest.model.max_input_tokens}",
+        f"max_output_tokens = {manifest.model.max_output_tokens}",
         f"embedding_model = {_toml_string(manifest.model.embedding_model)}",
         "",
         "[verify]",

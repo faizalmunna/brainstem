@@ -64,6 +64,24 @@ repository ──index──> local graph + SQLite store ──prepare_task─�
 
 The Python engine is complete and portable: no hosted Brainstem service, cloud account, compiler, or database server is required. State stays in the repository's local `.brain/` directory.
 
+### Provider policy and token discipline
+
+Brainstem can route an optional completion through Anthropic, OpenAI, or a local Ollama model, but provider calls remain outside the deterministic MCP tool surface. The broker obeys `brain.toml` policy, rejects over-budget input before it leaves the machine, sends each provider a native output cap, keys cached answers by the generation cap, and records only aggregate counts locally—never prompts, responses, cache keys, or credentials.
+
+```bash
+# Install only the optional cloud-provider SDKs you intend to use.
+uv sync --extra providers
+
+# Use the repository policy, or choose a provider/model deliberately.
+uv run brainstem ask "Summarize the selected evidence" --path /path/to/repository
+uv run brainstem ask "Summarize the selected evidence" --provider ollama --model llama3.2 --max-output-tokens 400 --path /path/to/repository
+
+# Audit cache efficiency and estimated usage. This output has no prompt text.
+uv run brainstem usage --path /path/to/repository
+```
+
+Token figures are portable character-based estimates for guardrails and trends, not provider billing records. Use provider usage reporting for invoice reconciliation.
+
 ## Independent agent team
 
 Brainstem does not pretend that a list of guides is a team. It stores named profiles, declarative teams, responsibilities, permissions, workflow state, and evidence so your connected host can run independent agents with clear boundaries.
@@ -127,6 +145,31 @@ uv run brainstem host install qwen-code --path /path/to/repository --apply
 uv run brainstem host doctor qwen-code --scope project --path /path/to/repository
 ```
 
+### Compose trusted third-party MCP servers
+
+Brainstem can catalog a reviewed peer MCP server beside its own server definition. A descriptor contains only transport metadata and environment-variable *names*. It cannot contain a credential, execute the third-party command, probe the remote URL, or silently modify a host configuration. That preserves the boundary between a local control plane and tools that may have network or write authority.
+
+`brainstem mcp render` emits a generic `mcpServers` entry. Remote-MCP schemas still differ by host, so review and adapt that entry to the selected host's documented remote transport format before installing it.
+
+```json
+{
+  "name": "github",
+  "transport": "streamable-http",
+  "url": "https://mcp.example.com/github",
+  "env_from": {"Authorization": "GITHUB_TOKEN"},
+  "description": "Reviewed GitHub MCP service"
+}
+```
+
+```bash
+# Inspect is data-only. Register requires an explicit write, then render a
+# portable entry for the host configuration you have reviewed.
+uv run brainstem mcp inspect github-mcp.json
+uv run brainstem mcp register github-mcp.json --path /path/to/repository
+uv run brainstem mcp register github-mcp.json --path /path/to/repository --apply
+uv run brainstem mcp render github --path /path/to/repository
+```
+
 ## Performance: measured, portable, and honest
 
 | Technology | Role in Brainstem | Status |
@@ -171,6 +214,8 @@ The full MCP surface includes repository evidence, local memory and skills, team
 | Capability creep | Read-only default and explicit permission grants. |
 | Sensitive file leakage | Bounded packets skip sensitive filenames and cap fallback source reads. |
 | Stale decisions | Memory can be hash-bound to source; stale references are excluded. |
+| Third-party MCP | Credential-free catalog, HTTPS-or-loopback remote policy, and explicit host-side composition; Brainstem never proxies peer tools. |
+| Model spending | Per-call input/output limits, response-semantic cache keys, and a prompt-free local usage ledger. |
 | Unverifiable completion | Workflow completion requires executed verification after implementation and an approved review. |
 | Supply-chain visibility | Locked dependencies, deterministic SBOM generation, CodeQL, Dependabot, secret scanning, and release checks. |
 

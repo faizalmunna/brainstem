@@ -131,7 +131,7 @@ def release_readiness(repo_root: Path) -> ReleaseReport:
         marker in ci
         for marker in (
             "startsWith(github.ref, 'refs/tags/v')",
-            "needs: [security, python, npm-wrapper, docker-image]",
+            "needs: [security, python, npm-wrapper, native-components, docker-image]",
             "uses: ./.github/workflows/release-artifacts.yml",
         )
     ) and "workflow_call:" in release_workflow
@@ -245,7 +245,7 @@ def release_readiness(repo_root: Path) -> ReleaseReport:
             tag_gated_release,
             "Release artifact creation waits for the full CI matrix on version tags"
             if tag_gated_release
-            else "Make the tag release job depend on security, Windows/Linux/macOS, npm, and Docker checks",
+            else "Make the tag release job depend on security, Python, npm, native-component, and Docker checks",
         ),
         ReleaseCheck(
             "Cross-architecture Docker configuration",

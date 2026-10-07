@@ -8,6 +8,7 @@ when a vector store is configured.
 from __future__ import annotations
 
 import hashlib
+import json
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,8 +23,17 @@ CREATE TABLE IF NOT EXISTS cache (
 """
 
 
-def cache_key(model: str, system: str | None, prompt: str) -> str:
-    payload = f"{model}\x00{system or ''}\x00{prompt}"
+def cache_key(
+    model: str, system: str | None, prompt: str, *, request_options: dict[str, object] | None = None
+) -> str:
+    """Hash the complete response-affecting request identity.
+
+    A cache entry made with a 32-token output cap must not be reused for the
+    same prompt later requested with a 1,024-token cap.  Options are serialized
+    canonically so call-site dictionary ordering cannot create false misses.
+    """
+    options = json.dumps(request_options or {}, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    payload = f"{model}\x00{system or ''}\x00{prompt}\x00{options}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 

@@ -37,6 +37,9 @@ DEFAULT_IGNORE = [
     "target",
     ".next",
     ".turbo",
+    # Benchmarks and local packaging checks commonly emit disposable evidence
+    # here; never make that generated material part of a repository graph.
+    ".tmp",
 ]
 
 

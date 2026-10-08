@@ -17,6 +17,7 @@ venv/
 # inputs to a Brainstem release.
 .npm-sync-test/
 work/
+.tmp/
 debug.log
 
 # Private development material. Keep planning, evaluation notes, host-test

@@ -23,7 +23,7 @@ dependencies = [
 providers = [
     "instructor>=1.6.0",
     "anthropic>=0.40.0",
-    "openai>=1.55.0",
+    "openai>=3.24.0",
 ]
 vector = [
     "lancedb>=0.16.0,<0.39.0",  # 0.39.0 dropped win_amd64 wheels; pin below that until fixed upstream

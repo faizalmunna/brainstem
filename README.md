@@ -145,6 +145,22 @@ uv run brainstem host install qwen-code --path /path/to/repository --apply
 uv run brainstem host doctor qwen-code --scope project --path /path/to/repository
 ```
 
+### Native harness package: Pi
+
+Pi uses installable skill packages rather than treating every integration as an
+MCP server. Brainstem therefore ships a dependency-free Pi package that teaches
+Pi to request bounded evidence, use the durable workflow, and require executed
+verification. It does not install a remote tool, add a credential, or claim
+that Pi is a native Brainstem MCP client.
+
+```bash
+# From a Brainstem checkout. Review the small package before installing it.
+pi install ./integrations/pi
+```
+
+Pi remains responsible for its own tool and MCP-extension configuration;
+Brainstem remains the local evidence and workflow control plane.
+
 ### Compose trusted third-party MCP servers
 
 Brainstem can catalog a reviewed peer MCP server beside its own server definition. A descriptor contains only transport metadata and environment-variable *names*. It cannot contain a credential, execute the third-party command, probe the remote URL, or silently modify a host configuration. That preserves the boundary between a local control plane and tools that may have network or write authority.

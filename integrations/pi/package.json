@@ -1,0 +1,16 @@
+{
+  "name": "@faizalmunna/brainstem-pi",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Brainstem evidence-first workflow skills for the Pi coding agent",
+  "keywords": [
+    "pi-package",
+    "brainstem",
+    "coding-agent"
+  ],
+  "pi": {
+    "skills": [
+      "./skills"
+    ]
+  }
+}

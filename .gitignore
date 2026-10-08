@@ -26,7 +26,6 @@ debug.log
 private/
 docs/
 bench/
-.agents/
 
 # Root Markdown is especially easy to create during local agent work. The
 # release contains only its public entry-point and security documents; keep

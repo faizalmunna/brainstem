@@ -13,6 +13,13 @@
     "developerName": "Faizal",
     "category": "Productivity",
     "capabilities": [],
-    "defaultPrompt": "Use Brainstem to retrieve the smallest relevant context and start an evidence-gated workflow for this task."
+    "defaultPrompt": [
+      "Use Brainstem to retrieve the smallest relevant context and start an evidence-gated workflow for this task."
+    ]
+  },
+  "extensions": {
+    "com.openai": {
+      "onboardingSkill": "./skills/setup/SKILL.md"
+    }
   }
 }

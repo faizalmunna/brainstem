@@ -28,6 +28,7 @@
   <img src="https://img.shields.io/badge/uv-locked%20runtime-DE5FE9?style=for-the-badge&logo=astral&logoColor=white" alt="uv" />
   <img src="https://img.shields.io/badge/Docker-non--root%20runtime-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
   <img src="https://img.shields.io/badge/Node.js-npm%20launcher-339933?style=for-the-badge&logo=nodedotjs&logoColor=white" alt="Node.js npm launcher" />
+  <img src="https://img.shields.io/badge/Agent_Plugins-portable%20skills-10A37F?style=for-the-badge" alt="Portable Agent Plugins skills" />
   <img src="https://img.shields.io/badge/GitHub_Actions-verified%20releases-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" alt="GitHub Actions" />
 </p>
 
@@ -144,6 +145,42 @@ uv run brainstem host install qwen-code --path /path/to/repository --apply
 # Verify the selected host configuration and the local MCP handshake.
 uv run brainstem host doctor qwen-code --scope project --path /path/to/repository
 ```
+
+### Native workflow packages
+
+MCP is the live, permission-gated tool connection. A workflow package is
+different: it teaches a host how to use the connection and durable evidence
+without silently adding a server, hook, credential, or extra permission.
+Brainstem ships one tracked portable skill bundle plus small host manifests;
+all manifests point at the same reviewed skills rather than copying workflow
+text between clients.
+
+| Harness | Package surface | What it adds | Connection remains |
+| --- | --- | --- | --- |
+| Codex / ChatGPT | Portable Agent Plugin + Codex compatibility manifest | Setup and evidence-gated workflow skills | Explicit local MCP configuration |
+| Claude Code | Claude plugin manifest | Shared workflow skills | `brainstem host install claude-code` |
+| Cursor | Cursor plugin manifest | Shared workflow skills | `brainstem host install cursor` |
+| Kimi Code | Kimi plugin manifest | Shared skills plus the safe setup skill at session start | Its own MCP configuration |
+| Pi | Dependency-free Pi package | Shared evidence/workflow skill | Pi's own MCP-extension configuration |
+| VS Code, Gemini CLI, Copilot CLI, OpenCode, Qwen Code, generic MCP | Standard local-stdio MCP adapter | Brainstem's 28 permission-gated tools | `brainstem host install <host>` or portable JSON |
+
+The source package is [`plugins/brainstem/`](plugins/brainstem/). Its Codex
+marketplace entry is tracked in [`.agents/plugins/marketplace.json`](.agents/plugins/marketplace.json),
+so a checkout can be added as a local marketplace without hand-writing plugin
+metadata. The plugin intentionally contains no MCP server, lifecycle hook, or
+credential: choose and install the local Brainstem connection separately.
+
+For Codex, add this checkout (or the GitHub repository) as a marketplace, then
+enable the `brainstem` package in a trusted project:
+
+```bash
+codex plugin marketplace add https://github.com/faizalmunna/brainstem.git
+```
+
+For the other harnesses, install the matching package using that host's plugin
+manager, then use the MCP command in the table above. Each package is
+contract-tested in this repository; host release versions remain responsible
+for accepting their published manifest format.
 
 ### Native harness package: Pi
 

@@ -1,0 +1,12 @@
+{
+  "name": "brainstem",
+  "version": "0.1.0",
+  "description": "Evidence-first repository intelligence and durable engineering workflows for Claude Code.",
+  "author": {
+    "name": "Faizal Munna"
+  },
+  "homepage": "https://github.com/faizalmunna/brainstem",
+  "repository": "https://github.com/faizalmunna/brainstem",
+  "license": "MIT",
+  "keywords": ["mcp", "repo-intelligence", "workflow", "security"]
+}

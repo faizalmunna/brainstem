@@ -4,8 +4,23 @@
   "version": "0.1.0",
   "description": "Repo intelligence and evidence-gated engineering workflows for coding agents.",
   "author": {
-    "name": "Faizal"
+    "name": "Faizal Munna"
   },
   "license": "MIT",
-  "keywords": ["mcp", "repo-intelligence", "workflow", "security"]
+  "keywords": ["mcp", "repo-intelligence", "workflow", "security"],
+  "extensions": {
+    "com.openai": {
+      "onboardingSkill": "./skills/setup/SKILL.md",
+      "interface": {
+        "displayName": "Brainstem",
+        "shortDescription": "Retrieve focused repository evidence and run durable engineering workflows.",
+        "longDescription": "Brainstem keeps repository context small and makes design, tests, verification, and review durable across sessions.",
+        "developerName": "Faizal Munna",
+        "category": "Developer Tools",
+        "capabilities": ["Interactive", "Read", "Write"],
+        "defaultPrompt": ["Use Brainstem to retrieve the smallest relevant context and start an evidence-gated workflow for this task."],
+        "websiteURL": "https://github.com/faizalmunna/brainstem"
+      }
+    }
+  }
 }

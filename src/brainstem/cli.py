@@ -33,16 +33,15 @@ def _open_workspace(path: Path) -> Workspace:
 
 app = typer.Typer(
     name="brainstem",
-    help="A portable AI engineering brain: repo intelligence, memory, and skills for any coding agent.",
+    help="A portable AI engineering agent engine: bounded repository intelligence, independent roles, and durable evidence gates.",
     no_args_is_help=True,
 )
-agent_app = typer.Typer(help="Manage declarative agent profiles (permission grants).")
+agent_app = typer.Typer(help="Manage permission-scoped agent identities and run bounded provider-backed agent turns.")
 app.add_typer(agent_app, name="agent")
 skill_app = typer.Typer(help="Install/remove/enable/disable individual skills or skill packs.")
 app.add_typer(skill_app, name="skill")
 team_app = typer.Typer(
-    help="Manage declarative agent-team compositions (who does what role). "
-    "A host agent reads these and does the actual multi-agent execution -- brainstem never runs one itself."
+    help="Manage independent agent teams and their workflow-role assignments."
 )
 app.add_typer(team_app, name="team")
 workflow_app = typer.Typer(help="Run durable, evidence-gated engineering workflows.")
@@ -1256,7 +1255,7 @@ def mcp_render(
 
 @agent_app.command("list")
 def agent_list(path: Path = typer.Option(Path("."), "--path", "-p")) -> None:
-    """List saved agent profiles for this repo."""
+    """List saved agent identities and their scoped capabilities."""
     ws = _open_workspace(path)
     directory = agents_dir(ws.repo_root)
     if not directory.is_dir():
@@ -1268,6 +1267,86 @@ def agent_list(path: Path = typer.Option(Path("."), "--path", "-p")) -> None:
         typer.echo(f"{profile.name}: [{perms}]  {profile.description}")
 
 
+@agent_app.command("run")
+def agent_run(
+    workflow_id: str = typer.Argument(..., help="Existing team-bound workflow id."),
+    agent: str = typer.Option(..., "--agent", help="Saved agent profile assigned to the workflow's current role."),
+    path: Path = typer.Option(Path("."), "--path", "-p"),
+    local: bool = typer.Option(False, "--local", help="Prefer the local Ollama backend if it is reachable."),
+    provider: str = typer.Option("auto", "--provider", help="auto or one of: anthropic, openai, ollama."),
+    model: str | None = typer.Option(None, "--model", help="Override the configured model for this one agent turn."),
+    max_input_tokens: int | None = typer.Option(
+        None, "--max-input-tokens", min=1, max=1_000_000, help="Reject an oversized bounded packet before a provider call."
+    ),
+    max_output_tokens: int | None = typer.Option(
+        None, "--max-output-tokens", min=1, max=100_000, help="Provider-enforced output cap for this turn."
+    ),
+) -> None:
+    """Run the currently assigned independent agent for one bounded model turn.
+
+    This invokes a configured provider and therefore requires an explicit user
+    command. The turn receives a bounded repository packet, records only
+    metadata/digests locally, and cannot edit source, run commands, advance a
+    workflow, or add permissions. Review its report before recording workflow
+    evidence or taking an action.
+    """
+    from .adapters.registry import build_backends
+    from .agents.runtime import run_agent_turn
+    from .broker.budget import CompletionBudget, TokenBudgetExceeded
+    from .broker.broker import RequestBroker
+    from .broker.cache import RequestCache
+    from .broker.router import NoBackendAvailable, Router
+    from .broker.usage import UsageLedger
+
+    ws = _open_workspace(path)
+    try:
+        backends = build_backends(ws.manifest.model, provider=provider, model=model, prefer_local=local)
+        budget = CompletionBudget(
+            max_input_tokens=max_input_tokens or ws.manifest.model.max_input_tokens,
+            max_output_tokens=max_output_tokens or ws.manifest.model.max_output_tokens,
+        )
+        broker = RequestBroker(
+            RequestCache(brain_state_path(ws.repo_root, "cache", "requests.db")),
+            Router(backends),
+            usage_ledger=UsageLedger(brain_state_path(ws.repo_root, "cache", "usage.db")),
+        )
+        result = run_agent_turn(
+            ws,
+            broker,
+            workflow_id=workflow_id,
+            profile_name=agent,
+            budget=budget,
+            prefer_local=local,
+        )
+    except (FileNotFoundError, PermissionError, ValueError, TokenBudgetExceeded) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from None
+    except NoBackendAvailable as exc:
+        typer.echo(str(exc), err=True)
+        typer.echo("Set ANTHROPIC_API_KEY / OPENAI_API_KEY, or run Ollama locally, then retry.", err=True)
+        raise typer.Exit(code=1) from None
+
+    typer.echo(result.report)
+    typer.echo(
+        f"\n[agent={result.run.profile}; role={result.run.role}; run={result.run.id}; "
+        f"backend={result.run.backend}; cache_hit={result.run.cache_hit}; "
+        f"~{result.run.input_tokens_estimated} input + ~{result.run.output_tokens_estimated} output tokens]",
+        err=True,
+    )
+
+
+@agent_app.command("runs")
+def agent_runs(
+    workflow_id: str | None = typer.Option(None, "--workflow", help="Only show runs for this workflow."),
+    path: Path = typer.Option(Path("."), "--path", "-p"),
+) -> None:
+    """List audit-safe metadata for completed or failed provider-backed agent turns."""
+    from .agents.runtime import list_runs
+
+    ws = _open_workspace(path)
+    typer.echo(json.dumps([run.model_dump() for run in list_runs(ws.repo_root, workflow_id=workflow_id)], indent=2))
+
+
 @team_app.command("create")
 def team_create(
     name: str = typer.Argument(..., help="Team name."),
@@ -1277,9 +1356,11 @@ def team_create(
     description: str = typer.Option("", "--description"),
     path: Path = typer.Option(Path("."), "--path", "-p"),
 ) -> None:
-    """Create a team: a named set of {agent profile, role} pairs. Each
-    profile must already exist (`brainstem agent create`) -- a team
-    pointing at nothing isn't useful to a host agent."""
+    """Create a team: a named set of agent profile/role pairs.
+
+    Each profile must already exist (`brainstem agent create`); a team that
+    points at no saved agent cannot be executed by a host or agent turn.
+    """
     from .agents.team import AgentTeam, TeamMember, save_team
 
     ws = _open_workspace(path)

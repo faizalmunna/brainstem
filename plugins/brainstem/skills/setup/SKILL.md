@@ -17,10 +17,15 @@ credential, network permission, or write permission.
    the local MCP connection still needs to be configured. Direct the user to
    `brainstem host install <host> --path <repository> --apply`, using a
    `readonly` profile unless the user explicitly needs more authority.
-4. Before a non-trivial change, create a durable workflow and record design,
-   plan, executed verification, and independent review evidence. Use the
-   `engineering-workflow` skill for the detailed gate sequence.
-5. Do not treat a model assertion, a chat transcript, or an unexecuted command
+4. Before a non-trivial change, bootstrap the least-privilege delivery team,
+   create a durable workflow, and run only the agent assigned to the current
+   workflow state. A human explicitly starts a provider-backed turn with
+   `brainstem agent run <workflow-id> --agent <role-profile>`; the turn has
+   bounded evidence and cannot silently edit files or run commands.
+5. Record design, plan, executed verification, and independent review
+   evidence before completing the workflow. Use the `engineering-workflow`
+   skill for the detailed gate sequence.
+6. Do not treat a model assertion, a chat transcript, or an unexecuted command
    as verification. Never put API keys, access tokens, or secrets in a
    Brainstem artifact or a plugin configuration.
 

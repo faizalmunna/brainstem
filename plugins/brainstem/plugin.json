@@ -2,7 +2,7 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "brainstem",
   "version": "0.1.0",
-  "description": "Repo intelligence and evidence-gated engineering workflows for coding agents.",
+  "description": "Permission-scoped engineering agents with bounded repository evidence and durable workflow gates.",
   "author": {
     "name": "Faizal Munna"
   },
@@ -13,8 +13,8 @@
       "onboardingSkill": "./skills/setup/SKILL.md",
       "interface": {
         "displayName": "Brainstem",
-        "shortDescription": "Retrieve focused repository evidence and run durable engineering workflows.",
-        "longDescription": "Brainstem keeps repository context small and makes design, tests, verification, and review durable across sessions.",
+        "shortDescription": "Run independent, permission-scoped engineering agents on bounded repository evidence.",
+        "longDescription": "Brainstem gives each engineering role bounded repository evidence, a least-privilege identity, and durable workflow gates for design, implementation, verification, and review.",
         "developerName": "Faizal Munna",
         "category": "Developer Tools",
         "capabilities": ["Interactive", "Read", "Write"],

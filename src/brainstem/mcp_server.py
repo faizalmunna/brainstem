@@ -316,12 +316,11 @@ def build_server(ws: Workspace, profile: AgentProfile | None = None) -> FastMCP:
 
     @mcp.tool()
     def list_teams() -> list[str]:
-        """List declarative agent-team compositions saved for this repo
+        """List independent agent teams saved for this repo
         (`.brain/agents/teams/*.toml`, created via `brainstem team
-        create`). Use with get_team(name) to see a team's actual member
-        profiles/roles/permissions -- a host agent uses this to know who
-        to spawn for a multi-agent task; brainstem doesn't spawn or
-        execute them itself."""
+        create`). Use with get_team(name) to inspect the member profiles,
+        roles, and permissions before a host or `brainstem agent run`
+        invokes the currently assigned agent."""
         require_permission("list_teams", profile)
         from .agents.team import list_teams as _list_teams
 

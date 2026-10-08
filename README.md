@@ -28,7 +28,7 @@
   <img src="https://img.shields.io/badge/uv-locked%20runtime-DE5FE9?style=for-the-badge&logo=astral&logoColor=white" alt="uv" />
   <img src="https://img.shields.io/badge/Docker-non--root%20runtime-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
   <img src="https://img.shields.io/badge/Node.js-npm%20launcher-339933?style=for-the-badge&logo=nodedotjs&logoColor=white" alt="Node.js npm launcher" />
-  <img src="https://img.shields.io/badge/Agent_Plugins-portable%20skills-10A37F?style=for-the-badge" alt="Portable Agent Plugins skills" />
+  <img src="https://img.shields.io/badge/Agents-role--scoped%20runtime-10A37F?style=for-the-badge" alt="Role-scoped agent runtime" />
   <img src="https://img.shields.io/badge/GitHub_Actions-verified%20releases-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" alt="GitHub Actions" />
 </p>
 
@@ -46,7 +46,7 @@
   <tr>
     <td align="center" width="25%"><h2>96.2%</h2><sub>smaller bounded source-context baseline<sup>†</sup></sub></td>
     <td align="center" width="25%"><h2>0.95</h2><sub>Recall@5 0.95 on labelled navigation tasks<sup>†</sup></sub></td>
-    <td align="center" width="25%"><h2>997</h2><sub>targeted engineering skills</sub></td>
+    <td align="center" width="25%"><h2>7</h2><sub>independent, least-privilege engineering agents</sub></td>
     <td align="center" width="25%"><h2>28</h2><sub>permission-gated MCP tools</sub></td>
   </tr>
 </table>
@@ -85,7 +85,13 @@ Token figures are portable character-based estimates for guardrails and trends, 
 
 ## Independent agent team
 
-Brainstem does not pretend that a list of guides is a team. It stores named profiles, declarative teams, responsibilities, permissions, workflow state, and evidence so your connected host can run independent agents with clear boundaries.
+Brainstem is an agent engine, not a catalogue of prompts. Every role has a
+saved identity, a least-privilege capability grant, an assigned workflow
+state, bounded repository evidence, and a durable audit trail. A host can
+orchestrate those identities as subagents, or Brainstem can run the currently
+assigned role through an explicitly selected provider for one bounded turn.
+The model report is not a workflow transition, source edit, or test result;
+those actions remain independently gated and evidence-backed.
 
 | Agent | Owns | Starts with | Cannot bypass |
 | --- | --- | --- | --- |
@@ -97,7 +103,11 @@ Brainstem does not pretend that a list of guides is a team. It stores named prof
 | **Reviewer** | Independent approval or return | Plan plus executed evidence | High-risk review independence |
 | **Coordinator** | The next ready work item | Workflow state and team contract | Silent agent spawning or privilege expansion |
 
-Brainstem provides the contract; Codex, Claude Code, Cursor, OpenCode, or another host performs the actual model calls and any subagent execution. That keeps the control plane model-neutral and auditable.
+The same team works through Codex, Claude Code, Cursor, OpenCode, and other
+MCP hosts. For a model-neutral local execution path, `brainstem agent run`
+uses the configured Anthropic, OpenAI, or Ollama provider, applies the
+repository's token budget, and records only run metadata and response digests.
+It never exposes a self-spend/self-escalate tool to a connected agent.
 
 ```bash
 # Create the repository state, then map it.
@@ -114,8 +124,20 @@ uv run brainstem team create delivery --member explorer:explorer --path /path/to
 # Or preview then create the complete seven-role, least-privilege delivery team.
 uv run brainstem team bootstrap --path /path/to/repository
 uv run brainstem team bootstrap --path /path/to/repository --apply
-uv run brainstem workflow start "Fix the OAuth callback" --team delivery --path /path/to/repository
+uv run brainstem workflow start "Fix the OAuth callback" --id fix-the-oauth-callback --team delivery --path /path/to/repository
+
+# This is a real, provider-backed explorer turn. It receives only a bounded
+# task packet, cannot change source or execute commands, and is audit logged.
+uv run brainstem agent run fix-the-oauth-callback --agent explorer --path /path/to/repository
+uv run brainstem agent runs --workflow fix-the-oauth-callback --path /path/to/repository
 ```
+
+The runtime routes one role at a time: explorer → designer → planner →
+implementer → tester → reviewer → coordinator. Workflow gates decide when
+that hand-off is legal, and each turn is rejected if the requested profile is
+not the role assigned to the workflow's current state. The 997 targeted
+engineering knowledge entries remain supporting retrieval material; they are
+not marketed as agents.
 
 ## Bring your agent, IDE, or CLI
 
@@ -146,22 +168,22 @@ uv run brainstem host install qwen-code --path /path/to/repository --apply
 uv run brainstem host doctor qwen-code --scope project --path /path/to/repository
 ```
 
-### Native workflow packages
+### Agent packages for coding harnesses
 
-MCP is the live, permission-gated tool connection. A workflow package is
-different: it teaches a host how to use the connection and durable evidence
+MCP is the live, permission-gated tool connection. An agent package is
+different: it teaches a host how to run Brainstem's scoped roles and durable evidence
 without silently adding a server, hook, credential, or extra permission.
-Brainstem ships one tracked portable skill bundle plus small host manifests;
-all manifests point at the same reviewed skills rather than copying workflow
-text between clients.
+Brainstem ships one tracked portable agent-instruction bundle plus small host
+manifests. All manifests point at the same reviewed workflow material rather
+than copying agent contracts between clients.
 
 | Harness | Package surface | What it adds | Connection remains |
 | --- | --- | --- | --- |
-| Codex / ChatGPT | Portable Agent Plugin + Codex compatibility manifest | Setup and evidence-gated workflow skills | Explicit local MCP configuration |
-| Claude Code | Claude plugin manifest | Shared workflow skills | `brainstem host install claude-code` |
-| Cursor | Cursor plugin manifest | Shared workflow skills | `brainstem host install cursor` |
-| Kimi Code | Kimi plugin manifest | Shared skills plus the safe setup skill at session start | Its own MCP configuration |
-| Pi | Dependency-free Pi package | Shared evidence/workflow skill | Pi's own MCP-extension configuration |
+| Codex / ChatGPT | Portable Agent Plugin + Codex compatibility manifest | Agent setup and role-scoped workflow instructions | Explicit local MCP configuration |
+| Claude Code | Claude plugin manifest | Agent-team workflow instructions | `brainstem host install claude-code` |
+| Cursor | Cursor plugin manifest | Agent-team workflow instructions | `brainstem host install cursor` |
+| Kimi Code | Kimi plugin manifest | Agent setup at session start | Its own MCP configuration |
+| Pi | Dependency-free Pi package | Evidence/workflow instructions for Brainstem agents | Pi's own MCP-extension configuration |
 | VS Code, Gemini CLI, Copilot CLI, OpenCode, Qwen Code, generic MCP | Standard local-stdio MCP adapter | Brainstem's 28 permission-gated tools | `brainstem host install <host>` or portable JSON |
 
 The source package is [`plugins/brainstem/`](plugins/brainstem/). Its Codex

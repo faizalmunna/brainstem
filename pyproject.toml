@@ -1,7 +1,7 @@
 [project]
 name = "brainstem"
 version = "0.1.0"
-description = "A portable, model-agnostic AI engineering brain: repo intelligence, memory, and skills exposed over MCP to any coding agent."
+description = "A portable, model-agnostic AI engineering agent engine: bounded repository intelligence, independent roles, and durable evidence gates."
 readme = "README.md"
 authors = [
     { name = "Faizal Munna", email = "25580043+faizalmunna@users.noreply.github.com" }

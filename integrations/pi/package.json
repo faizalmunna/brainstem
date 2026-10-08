@@ -2,11 +2,12 @@
   "name": "@faizalmunna/brainstem-pi",
   "version": "0.1.0",
   "private": true,
-  "description": "Brainstem evidence-first workflow skills for the Pi coding agent",
+  "description": "Brainstem role-scoped engineering-agent instructions for the Pi coding agent",
   "keywords": [
     "pi-package",
     "brainstem",
-    "coding-agent"
+    "coding-agent",
+    "agent-runtime"
   ],
   "pi": {
     "skills": [

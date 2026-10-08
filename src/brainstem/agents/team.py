@@ -1,13 +1,10 @@
-"""Declarative agent-team composition: a named set of {profile, role}
-pairs that a host agent (Claude Code's own subagent system, Codex's,
-etc.) queries and uses to spawn its own multi-agent execution -- brainstem
-defines the WHO and WHAT PERMISSIONS, the host still does the actual
-multi-agent orchestration and LLM calls.
+"""Independent agent-team composition and least-privilege role routing.
 
-Brainstem is a coordination layer, not another agent runner. An actual
-multi-agent execution engine would duplicate host behavior and add another
-agent loop. A team is therefore declarative data a host can consume, never
-something Brainstem executes itself.
+A team defines the agent identity allowed to act at each workflow state.
+Connected hosts may orchestrate the team with their own subagent facility;
+Brainstem can also run one bounded provider-backed turn at a time through
+``agents.runtime``. Neither route grants an agent more than its saved profile
+and workflow scope.
 """
 
 from __future__ import annotations
@@ -32,9 +29,9 @@ TEAMS_DIRNAME = "teams"
 DEFAULT_DELIVERY_TEAM = "delivery"
 
 # A useful team is more than role names in a README. These profiles are a
-# conservative, host-neutral starting point: only the worker that changes
-# source receives WRITE, and only the worker that runs configured checks gets
-# EXECUTE. Hosts may run them as separate agents or hand roles to humans.
+# conservative starting point: only the worker expected to change source is
+# granted WRITE, and only the tester receives EXECUTE. A host or the bounded
+# local agent runtime may run roles independently.
 DELIVERY_BLUEPRINT: tuple[tuple[str, str, set[Permission]], ...] = (
     ("explorer", "Retrieve bounded repository evidence and map dependencies.", {Permission.READ}),
     ("designer", "Record architecture choices and trade-offs for review.", {Permission.READ}),

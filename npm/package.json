@@ -1,7 +1,7 @@
 {
   "name": "@faizalmunna/brainstem",
   "version": "0.1.0",
-  "description": "npm wrapper for brainstem, a portable AI engineering brain (repo intelligence, memory, skills) exposed over MCP to any coding agent. This is an installer/launcher for the real Python implementation, not a Node reimplementation -- see README.md.",
+  "description": "npm wrapper for Brainstem, a portable AI engineering agent engine with bounded repository intelligence, independent roles, and durable evidence gates. This is an installer/launcher for the real Python implementation, not a Node reimplementation -- see README.md.",
   "license": "MIT",
   "author": "Faizal Munna",
   "homepage": "https://github.com/faizalmunna/brainstem",
@@ -39,6 +39,8 @@
     "claude-code",
     "codex",
     "repo-intelligence",
-    "agent-skills"
+    "agent-skills",
+    "agent-runtime",
+    "multi-agent"
   ]
 }

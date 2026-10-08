@@ -1,7 +1,7 @@
 {
   "name": "brainstem",
   "version": "0.1.0",
-  "description": "Repo intelligence and evidence-gated engineering workflows for coding agents.",
+  "description": "Permission-scoped engineering agents with bounded repository evidence and durable workflow gates.",
   "author": {
     "name": "Faizal"
   },

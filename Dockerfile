@@ -22,6 +22,12 @@ ENV BRAINSTEM_TEST_MCP_TIMEOUT_S=${MCP_TEST_TIMEOUT_S}
 COPY tests ./tests
 COPY tools ./tools
 COPY assets ./assets
+# These tracked package fixtures are exercised by the repository test suite.
+# They remain exclusive to this test-only stage; the runtime image copies only
+# the virtual environment from the builder stage.
+COPY .agents ./.agents
+COPY integrations ./integrations
+COPY plugins ./plugins
 RUN uv sync --locked --extra dev \
     && uv run pytest -q --ignore=tests/test_docker_distribution.py
 

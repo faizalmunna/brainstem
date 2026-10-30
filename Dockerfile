@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Build the exact runtime dependency graph recorded in uv.lock, then copy only
 # the resulting virtual environment into the small non-root runtime image.
-FROM ghcr.io/astral-sh/uv:0.11.7@sha256:240fb85ab0f263ef12f492d8476aa3a2e4e1e333f7d67fbdd923d00a506a516a AS uv
+FROM ghcr.io/astral-sh/uv:0.13.6@sha256:af22a52f5eafef3d78e551599d405c02df61919d18028f0cea8eda93bc9986d0 AS uv
 
 FROM python:3.11-slim@sha256:da047cb8f9d1d98e5c070f5300ba9f7274e33b8fc0e5be5ed88740aed1b95ba9 AS builder
 # Build at the virtualenv's final absolute location. Console-script shebangs
